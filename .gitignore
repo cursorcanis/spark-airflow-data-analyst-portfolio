@@ -1,0 +1,16 @@
+# Private working notes (contain home-network details) - never publish
+HANDOFF.md
+
+# Secrets and local env
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Runtime data (lives in Docker volumes on the server)
+data/
+logs/
