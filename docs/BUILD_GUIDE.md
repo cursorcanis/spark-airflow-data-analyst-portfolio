@@ -303,3 +303,138 @@ Then Steps 5, 9 and 11 for verification.
 ## Step 14: How to explain it in 60 seconds
 
 > "I built a local-first data platform for Atlanta transit data that's portable to the cloud. Airflow 3 orchestrates the ingestion. The first DAG pulls MARTA's GTFS feed weekly, validates it with unit-tested Python, and uses a content hash to skip unchanged feeds, so it's idempotent. Raw files land immutable in an S3-compatible lake, partitioned by ingest date with a manifest for lineage. Spark will curate them into Delta/Parquet, and dbt models them into a PostGIS star schema for Power BI. Everything is defined in one Docker Compose file with pinned versions, health-checked startup order, memory limits and secrets in env vars, and GitHub Actions runs lint, tests and config validation on every push. Swapping in AWS S3, Databricks or Snowflake is a configuration change, not a rewrite."
+
+---
+
+# Phase 1: realtime capture and reference data
+
+Phase 1 adds three flows on top of the foundation:
+
+```
+MARTA GTFS-rt ──(every 30 s / 120 s)──► rt-poller ──► s3://raw/gtfs_rt/...pb.gz        (raw snapshots)
+                                                         │ hourly (Airflow)
+                                                         ▼
+                                         s3://raw/gtfs_rt_parquet/...parquet  (+ manifest per hour)
+                                                         │ daily (Airflow): delete compacted snapshots > 14 days
+Census TIGERweb ──(quarterly, Airflow)──► s3://raw/census_tracts/...geojson ──► Postgres raw.census_tracts (PostGIS)
+```
+
+## Step 15: Understand the realtime feeds
+
+GTFS-realtime is **Protocol Buffers** (protobuf), a compact binary format defined by a schema (`gtfs-realtime.proto`). You need the generated Python classes (`gtfs-realtime-bindings`) to decode it. Each fetch returns a `FeedMessage` with a header (whose `timestamp` says when MARTA generated it) and a list of entities.
+
+| Feed | URL path | Size per fetch (Sunday midday) | Content |
+|---|---|---|---|
+| Vehicle positions | `/vehicle/vehiclepositions.pb` | ~14 KB, ~171 vehicles | lat/lon, bearing, trip, route, vehicle id |
+| Trip updates | `/tripupdate/tripupdates.pb` | ~850 KB, ~20,000 stop predictions | per trip: arrival/departure time at each upcoming (and just-passed) stop |
+
+MARTA regenerates both every ~30 seconds. No API key is needed, but a real `User-Agent` is required (same as the static feed).
+
+**Inspect one yourself:**
+```python
+import requests
+from google.transit import gtfs_realtime_pb2
+b = requests.get("https://gtfs-rt.itsmarta.com/TMGTFSRealTimeWebService/vehicle/vehiclepositions.pb",
+                 headers={"User-Agent": "my-test/0.1"}).content
+m = gtfs_realtime_pb2.FeedMessage(); m.ParseFromString(b)
+print(m.header.timestamp, len(m.entity)); print(m.entity[0])
+```
+
+## Step 16: Capture with a dedicated poller service (not Airflow)
+
+**Design decision:** Airflow is a *batch orchestrator*. Each DAG run creates database rows, logs and scheduling overhead. Running a DAG every 30 seconds (2,880 runs per day) would bloat the metadata DB and the scheduler. The standard pattern is:
+- a small **long-running service** does the high-frequency capture, and
+- **Airflow** does the periodic batch work on what was captured (hourly compaction).
+
+`src/atl_transit/rt_poller.py`, run in its own container (`rt-poller`, image built from `docker/poller/Dockerfile`):
+1. A loop with a separate timer per feed (vehicle positions every 30 s, trip updates every 120 s; set in `.env`).
+2. Fetch → decode the header → **skip if the header timestamp equals the last one stored** (dedup: MARTA hadn't refreshed yet).
+3. Gzip the bytes and `put_object` to `s3://raw/gtfs_rt/feed=<feed>/date=YYYY-MM-DD/hour=HH/<feed>_<unix_ts>.pb.gz`. The partition comes from the **feed's own UTC timestamp**, not the fetch time.
+4. On error: log it and back off exponentially (capped at 5 min), but never exit. One bad response must not stop capture.
+5. Write a **heartbeat** file every loop. The Docker `HEALTHCHECK` marks the container unhealthy if it's older than 3 minutes.
+6. Handle `SIGTERM` (sent by `docker compose stop`) to exit cleanly.
+
+The poller uses plain `boto3` (not Airflow hooks) because it isn't an Airflow component. Its image is a small `python:3.12-slim`, not the 3 GB Airflow image.
+
+**Verify:** `docker compose logs -f rt-poller` shows `{"event": "stored", ...}` lines. In the lake console, `raw/gtfs_rt/` grows.
+
+Storage maths (why compaction + retention): trip updates are ~190 KB gzipped × 720 per day ≈ 140 MB/day, and vehicle positions ≈ 15 MB/day.
+
+## Step 17: Extend the Airflow image
+
+The DAGs now import `gtfs-realtime-bindings`, which the official image doesn't include. `docker/airflow/Dockerfile` extends it:
+```dockerfile
+FROM apache/airflow:3.4.0-python3.12
+RUN pip install --no-cache-dir "apache-airflow==3.4.0" "gtfs-realtime-bindings==2.0.0" "protobuf>=6,<7"
+```
+- Pinning `apache-airflow==3.4.0` in the same command stops pip from changing Airflow while resolving dependencies.
+- `protobuf<7`: bindings 3.x need protobuf 7, which would conflict with Airflow's own dependencies, so we use bindings 2.0.0.
+- In `docker-compose.yml` the shared Airflow block now has `build:` plus `image: atl-transit/airflow:3.4.0-1`. Run `docker compose build` once, and after any Dockerfile change.
+
+Why not `_PIP_ADDITIONAL_REQUIREMENTS`? It reinstalls packages on **every** container start: slow, and it breaks if PyPI is unreachable. Baked images are reproducible.
+
+## Step 18: Hourly compaction DAG (`gtfs_rt_hourly`)
+
+**The "small files problem":** 120 + 30 tiny files per hour is inefficient for Spark and query engines (per-file overhead). Compaction merges each hour into **one columnar Parquet file per feed**.
+
+```
+wait_for_late_files ──► compact[vehicle_positions] ─┐
+                    └─► compact[trip_updates] ──────┴─► check_and_record
+```
+
+Key techniques:
+1. **Timetable with data intervals:** `CronDataIntervalTimetable("0 * * * *", timezone="UTC")`. The run for interval `[22:00, 23:00)` starts at 23:00 and processes exactly that hour. *Gotcha found while building:* in Airflow 3 a plain `schedule="@hourly"` uses `CronTriggerTimetable`, which runs **at** 22:00 with an empty interval, so it compacted a half-captured hour. Use the data-interval timetable whenever a run must cover "the period that just ended".
+2. **Sensor:** `TimeDeltaSensor(delta=5 min, mode="reschedule")` waits until 23:05 so the last snapshots of the hour have landed. `reschedule` mode frees the worker slot between checks instead of sleeping in it.
+3. **Dynamic task mapping:** `compact.expand(feed=[...])` creates one task instance per feed at runtime (`map_index` 0 and 1). They run in parallel and retry independently. Downstream, `check_and_record` receives all mapped results as a list. In Airflow 3 that's a lazy sequence, so convert it with `[dict(r) for r in results]`.
+4. **Streaming write:** each snapshot is decoded, flattened (vehicle positions: 1 row per vehicle; trip updates: 1 row per trip × stop) and appended to a `pyarrow.parquet.ParquetWriter` (zstd compression). Memory stays small even for ~600k trip-update rows per hour.
+5. **Explicit schema** (`VEHICLE_POSITIONS_SCHEMA`, `TRIP_UPDATES_SCHEMA` in `gtfs_rt.py`): unset protobuf fields become NULL, not 0. A missing speed is not a speed of zero.
+6. **Idempotency:** output key `.../hour=HH/part-000.parquet` with `replace=True`, so re-running an hour overwrites it instead of duplicating.
+7. **Data-quality check:** completeness = snapshots ÷ expected (3600 / poll interval). Zero snapshots fails the run (capture is down); under 80% is recorded as a warning.
+8. **Manifest per hour:** `s3://raw/gtfs_rt_parquet/_manifests/date=.../hour=HH.json` holds counts, completeness and problems. It's the audit trail, and housekeeping uses it.
+9. **catchup=True:** if the server was off for 6 hours, Airflow creates the 6 missed runs when it comes back. `max_active_runs=2` throttles them.
+
+**Verify:** after HH:05 UTC, the grid view shows a green run. `raw/gtfs_rt_parquet/feed=.../date=.../hour=.../part-000.parquet` exists, and the manifest shows `completeness` near 1.0.
+
+## Step 19: Retention DAG (`lake_housekeeping`)
+
+Daily at 03:30 ET it deletes raw snapshots **older than 14 days AND whose hour has a manifest** (that is, it was compacted). Uncompacted hours are never deleted, so a broken compaction can't cause data loss. Deletes are batched (S3 `DeleteObjects` takes max 1,000 keys per call). The decision logic is a pure function (`purgeable_keys`) with a unit test.
+
+## Step 20: Reference data, Census tracts into PostGIS (`census_tracts_reference`)
+
+Source: the Census Bureau's **TIGERweb** ArcGIS REST service (no key). Region: the 11 Atlanta Regional Commission counties (FIPS state 13).
+1. **Count first** (`returnCountOnly=true`) → 1,248 tracts.
+2. **Page through** results (`resultOffset` / `resultRecordCount=200`, ordered by GEOID) as GeoJSON in WGS84 (`outSR=4326`).
+3. **Verify** the number of unique GEOIDs equals the count; otherwise fail. That catches silent paging bugs.
+4. **Land raw** GeoJSON in `s3://raw/census_tracts/ingest_date=.../` (raw-zone rule).
+5. **Load in one transaction:** `CREATE TABLE IF NOT EXISTS` → `TRUNCATE` → insert all rows → validate the row count → `ANALYZE` → `COMMIT`. On any error, `ROLLBACK`. Readers never see an empty or half-loaded table (TRUNCATE takes a lock that makes them wait for the commit).
+6. Geometry: `ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON(...), 4326))` stores every tract as `MultiPolygon` in SRID 4326. A **GiST index** makes point-in-polygon joins fast.
+
+New Airflow connection: `AIRFLOW_CONN_WAREHOUSE_PG` (JSON) → `PostgresHook(postgres_conn_id="warehouse_pg")`. It logs in as the `warehouse` role, not the superuser.
+
+**Verify:**
+```sql
+SELECT count(*), count(DISTINCT county_fips), count(*) FILTER (WHERE NOT ST_IsValid(geom)) FROM raw.census_tracts;
+-- 1248 | 11 | 0
+SELECT geoid, tract_name FROM raw.census_tracts
+WHERE ST_Contains(geom, ST_SetSRID(ST_MakePoint(-84.3916, 33.7539), 4326));   -- Five Points station
+-- 13121011901 | Census Tract 119.01
+```
+
+*(Census ACS demographics such as population, income and car-free households need a free Census API key; they'll be added once one is available.)*
+
+## Step 21: Deploy Phase 1
+
+```bash
+git pull
+# add the new variables from .env.example to .env (POLL_*, RAW_RT_RETENTION_DAYS)
+docker compose build            # builds atl-transit/airflow and atl-transit/rt-poller
+docker compose up -d            # recreates Airflow containers, starts rt-poller
+docker compose exec airflow-scheduler airflow dags unpause gtfs_rt_hourly
+docker compose exec airflow-scheduler airflow dags unpause lake_housekeeping
+docker compose exec airflow-scheduler airflow dags unpause census_tracts_reference
+docker compose exec airflow-scheduler airflow dags trigger census_tracts_reference
+```
+
+## Updated 60-second pitch
+
+> "...On top of that, a dedicated poller captures MARTA's GTFS-realtime protobuf feeds every 30 seconds, deduplicated by feed timestamp, into the raw zone. Airflow compacts each hour into Parquet using a data-interval timetable, a late-arrival sensor and dynamic task mapping per feed, with a completeness check and a manifest per hour. Retention deletes raw snapshots only after they've been compacted. Census tract boundaries are loaded transactionally into PostGIS for spatial joins. I chose a separate poller because Airflow is a batch orchestrator, not a 30-second scheduler."
