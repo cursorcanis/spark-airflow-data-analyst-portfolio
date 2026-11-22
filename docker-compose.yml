@@ -3,7 +3,11 @@
 name: atl-transit
 
 x-airflow-common: &airflow-common
-  image: apache/airflow:3.4.0-python3.12
+  # Official Airflow image + our extra packages (docker/airflow/Dockerfile); built locally on first `up`.
+  build:
+    context: .
+    dockerfile: docker/airflow/Dockerfile
+  image: atl-transit/airflow:3.4.0-1
   user: "${AIRFLOW_UID:-50000}:0"
   environment: &airflow-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -22,6 +26,13 @@ x-airflow-common: &airflow-common
     AIRFLOW_CONN_LAKE_S3: >-
       {"conn_type": "aws", "login": "${LAKE_ACCESS_KEY:?set in .env}", "password": "${LAKE_SECRET_KEY:?set in .env}",
       "extra": {"endpoint_url": "http://lake:9000", "region_name": "us-east-1"}}
+    # Warehouse connection (PostGIS) used by reference-data loads and, later, dbt.
+    AIRFLOW_CONN_WAREHOUSE_PG: >-
+      {"conn_type": "postgres", "host": "postgres", "port": 5432, "schema": "warehouse",
+      "login": "warehouse", "password": "${WAREHOUSE_DB_PASSWORD}"}
+    POLL_VEHICLE_POSITIONS_S: ${POLL_VEHICLE_POSITIONS_S:-30}
+    POLL_TRIP_UPDATES_S: ${POLL_TRIP_UPDATES_S:-120}
+    RAW_RT_RETENTION_DAYS: ${RAW_RT_RETENTION_DAYS:-14}
   volumes:
     - ./airflow/dags:/opt/airflow/dags:ro
     - ./src:/opt/airflow/src:ro
@@ -69,6 +80,27 @@ services:
     deploy:
       resources:
         limits: { memory: 512m }
+    restart: unless-stopped
+
+  # 24/7 capture of MARTA GTFS-realtime feeds -> raw snapshots in the lake (see src/atl_transit/rt_poller.py)
+  rt-poller:
+    build:
+      context: .
+      dockerfile: docker/poller/Dockerfile
+    image: atl-transit/rt-poller:0.1.0
+    environment:
+      LAKE_ENDPOINT_URL: http://lake:9000
+      LAKE_ACCESS_KEY: ${LAKE_ACCESS_KEY}
+      LAKE_SECRET_KEY: ${LAKE_SECRET_KEY}
+      LAKE_RAW_BUCKET: raw
+      POLL_VEHICLE_POSITIONS_S: ${POLL_VEHICLE_POSITIONS_S:-30}
+      POLL_TRIP_UPDATES_S: ${POLL_TRIP_UPDATES_S:-120}
+    depends_on:
+      lake:
+        condition: service_started
+    deploy:
+      resources:
+        limits: { memory: 256m }
     restart: unless-stopped
 
   airflow-init:
