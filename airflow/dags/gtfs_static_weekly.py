@@ -26,6 +26,8 @@ from airflow.sdk import dag, task
 from atl_transit.gtfs import validate_gtfs_zip
 
 FEED_URL = os.environ.get("MARTA_GTFS_STATIC_URL", "https://www.itsmarta.com/google_transit_feed/google_transit.zip")
+# MARTA's web server rejects the default python-requests User-Agent (HTTP 403), so identify the client.
+USER_AGENT = "atl-transit-pipeline/0.1 (+https://github.com/cursorcanis/spark-airflow-data-analyst-portfolio)"
 LAKE_CONN_ID = "lake_s3"
 RAW_BUCKET = os.environ.get("LAKE_RAW_BUCKET", "raw")
 PREFIX = "gtfs_static"
@@ -47,7 +49,7 @@ def gtfs_static_weekly():
     def download_and_validate() -> dict:
         workdir = Path(tempfile.mkdtemp(prefix="gtfs_static_"))
         zip_path = workdir / "google_transit.zip"
-        with requests.get(FEED_URL, stream=True, timeout=(10, 300)) as resp:
+        with requests.get(FEED_URL, headers={"User-Agent": USER_AGENT}, stream=True, timeout=(10, 300)) as resp:
             resp.raise_for_status()
             with open(zip_path, "wb") as fh:
                 for chunk in resp.iter_content(chunk_size=1 << 20):
