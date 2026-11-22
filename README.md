@@ -85,6 +85,8 @@ Unpause `gtfs_static_weekly` in Airflow, or trigger it manually.
 
 Run the tests: `pip install -e ".[dev]" && pytest`
 
+A full step-by-step explanation of how every component is wired together is in [docs/BUILD_GUIDE.md](docs/BUILD_GUIDE.md).
+
 ## Roadmap
 
 - [x] **Phase 0: Foundation.** Docker platform, CI, first ingest DAG (GTFS static)
