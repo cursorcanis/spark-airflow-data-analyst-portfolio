@@ -7,7 +7,7 @@ x-airflow-common: &airflow-common
   build:
     context: .
     dockerfile: docker/airflow/Dockerfile
-  image: atl-transit/airflow:3.4.0-1
+  image: atl-transit/airflow:3.4.0-2
   user: "${AIRFLOW_UID:-50000}:0"
   environment: &airflow-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -33,6 +33,7 @@ x-airflow-common: &airflow-common
     POLL_VEHICLE_POSITIONS_S: ${POLL_VEHICLE_POSITIONS_S:-30}
     POLL_TRIP_UPDATES_S: ${POLL_TRIP_UPDATES_S:-120}
     RAW_RT_RETENTION_DAYS: ${RAW_RT_RETENTION_DAYS:-14}
+    SPARK_CONNECT_URL: sc://spark-connect:15002
   volumes:
     - ./airflow/dags:/opt/airflow/dags:ro
     - ./src:/opt/airflow/src:ro
@@ -42,6 +43,18 @@ x-airflow-common: &airflow-common
       condition: service_healthy
     lake:
       condition: service_started
+
+x-spark-common: &spark-common
+  # Official Spark image + Delta Lake + S3A jars (docker/spark/Dockerfile)
+  build:
+    context: docker/spark
+  image: atl-transit/spark:4.2.1-delta4.4.1
+  environment: &spark-env
+    SPARK_NO_DAEMONIZE: "true"
+    # S3A reads lake credentials from the standard AWS env vars (keeps secrets out of process arguments)
+    AWS_ACCESS_KEY_ID: ${LAKE_ACCESS_KEY}
+    AWS_SECRET_ACCESS_KEY: ${LAKE_SECRET_KEY}
+  restart: unless-stopped
 
 services:
   postgres:
@@ -162,23 +175,21 @@ services:
         limits: { memory: 768m }
     restart: unless-stopped
 
+  # ---- Spark: standalone cluster + Spark Connect server (Spark 4 client/server API) ----------------------
   spark-master:
-    image: apache/spark:4.2.1-python3
+    <<: *spark-common
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
-    environment:
-      SPARK_NO_DAEMONIZE: "true"
     ports:
       - "${BIND_ADDR:-127.0.0.1}:8081:8080"   # master UI
     deploy:
       resources:
         limits: { memory: 768m }
-    restart: unless-stopped
 
   spark-worker:
-    image: apache/spark:4.2.1-python3
+    <<: *spark-common
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     environment:
-      SPARK_NO_DAEMONIZE: "true"
+      <<: *spark-env
       SPARK_WORKER_CORES: "4"
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY:-2g}
     ports:
@@ -188,7 +199,51 @@ services:
     deploy:
       resources:
         limits: { memory: 3g }
-    restart: unless-stopped
+
+  # Long-running Spark application that accepts DataFrame plans over gRPC (port 15002).
+  # Airflow tasks connect with the thin `pyspark-client` (sc://spark-connect:15002): no Java and no
+  # Python-version coupling in the Airflow image. This process is the Spark *driver*; executors run on the worker.
+  spark-connect:
+    <<: *spark-common
+    command:
+      - /opt/spark/sbin/start-connect-server.sh
+      - --master
+      - spark://spark-master:7077
+      - --conf
+      - spark.driver.memory=1g
+      - --conf
+      - spark.driver.host=spark-connect
+      - --conf
+      - spark.driver.bindAddress=0.0.0.0
+      - --conf
+      - spark.executor.memory=${SPARK_EXECUTOR_MEMORY:-1536m}
+      - --conf
+      - spark.executor.cores=4
+      - --conf
+      - spark.sql.shuffle.partitions=8
+      - --conf
+      - spark.sql.session.timeZone=UTC
+      - --conf
+      - spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension
+      - --conf
+      - spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog
+      - --conf
+      - spark.hadoop.fs.s3a.endpoint=http://lake:9000
+      - --conf
+      - spark.hadoop.fs.s3a.endpoint.region=us-east-1
+      - --conf
+      - spark.hadoop.fs.s3a.path.style.access=true
+      - --conf
+      - spark.hadoop.fs.s3a.connection.ssl.enabled=false
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:8083:4040"   # Spark application UI (jobs, stages, SQL plans)
+    depends_on:
+      - spark-master
+      - spark-worker
+      - lake
+    deploy:
+      resources:
+        limits: { memory: 1536m }
 
 volumes:
   postgres-data:

@@ -22,6 +22,7 @@ import pendulum
 import requests
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.sdk import dag, task
+from lake_assets import RAW_GTFS_STATIC
 
 from atl_transit.gtfs import validate_gtfs_zip
 
@@ -78,7 +79,7 @@ def gtfs_static_weekly():
             shutil.rmtree(Path(meta["zip_path"]).parent, ignore_errors=True)
         return changed
 
-    @task
+    @task(outlets=[RAW_GTFS_STATIC])  # success -> triggers spark_curate_gtfs_static
     def upload(meta: dict) -> str:
         hook = S3Hook(aws_conn_id=LAKE_CONN_ID)
         zip_path = Path(meta["zip_path"])

@@ -22,6 +22,7 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.standard.sensors.time_delta import TimeDeltaSensor
 from airflow.sdk import dag, task
 from airflow.timetables.interval import CronDataIntervalTimetable
+from lake_assets import RAW_RT_PARQUET
 
 from atl_transit.gtfs_rt import (
     FLATTENERS,
@@ -96,7 +97,7 @@ def gtfs_rt_hourly():
         stats["output"] = f"s3://{RAW_BUCKET}/{out_key}"
         return stats
 
-    @task
+    @task(outlets=[RAW_RT_PARQUET])  # success -> triggers spark_curate_rt
     def check_and_record(results: list[dict], data_interval_start=None) -> dict:
         results = [dict(r) for r in results]  # mapped XComs arrive as a lazy sequence; materialize them
         problems = []

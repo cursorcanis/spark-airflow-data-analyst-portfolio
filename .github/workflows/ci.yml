@@ -13,6 +13,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: actions/setup-java@v4   # Spark unit tests need a JVM
+        with:
+          distribution: temurin
+          java-version: "21"
       - run: pip install -e ".[dev]"
       - name: Lint
         run: ruff check src tests airflow
