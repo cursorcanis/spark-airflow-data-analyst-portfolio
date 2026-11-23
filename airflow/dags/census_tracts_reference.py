@@ -22,6 +22,7 @@ from airflow.exceptions import AirflowSkipException
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.sdk import dag, task
+from lake_assets import WAREHOUSE_CENSUS
 
 from atl_transit.census import ACS_VARIABLES, acs_rows, count_tracts, feature_to_row, fetch_acs_tracts, fetch_tracts
 from atl_transit.gtfs_rt import USER_AGENT
@@ -118,7 +119,7 @@ def census_tracts_reference():
         )
         return {"key": key, "tracts": expected}
 
-    @task
+    @task(outlets=[WAREHOUSE_CENSUS])
     def load_to_postgis(meta: dict) -> int:
         body = S3Hook(aws_conn_id=LAKE_CONN_ID).read_key(meta["key"], RAW_BUCKET)
         rows = [feature_to_row(f) for f in json.loads(body)["features"]]
@@ -156,7 +157,7 @@ def census_tracts_reference():
         S3Hook(aws_conn_id=LAKE_CONN_ID).load_string(json.dumps(table), key, RAW_BUCKET, replace=True)
         return {"key": key, "tracts": len(table) - 1}
 
-    @task
+    @task(outlets=[WAREHOUSE_CENSUS])
     def load_acs(meta: dict) -> int:
         table = json.loads(S3Hook(aws_conn_id=LAKE_CONN_ID).read_key(meta["key"], RAW_BUCKET))
         loaded = _full_refresh("raw.acs_tract_demographics", ACS_DDL, ACS_INSERT, acs_rows(table, ACS_YEAR),

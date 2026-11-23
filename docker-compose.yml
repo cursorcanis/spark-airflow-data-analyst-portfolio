@@ -7,7 +7,7 @@ x-airflow-common: &airflow-common
   build:
     context: .
     dockerfile: docker/airflow/Dockerfile
-  image: atl-transit/airflow:3.4.0-2
+  image: atl-transit/airflow:3.4.0-3
   user: "${AIRFLOW_UID:-50000}:0"
   environment: &airflow-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -34,10 +34,16 @@ x-airflow-common: &airflow-common
     POLL_TRIP_UPDATES_S: ${POLL_TRIP_UPDATES_S:-120}
     RAW_RT_RETENTION_DAYS: ${RAW_RT_RETENTION_DAYS:-14}
     SPARK_CONNECT_URL: sc://spark-connect:15002
+    # dbt connects to the warehouse with these (dbt/profiles.yml reads env vars)
+    DBT_PG_HOST: postgres
+    DBT_PG_USER: warehouse
+    DBT_PG_PASSWORD: ${WAREHOUSE_DB_PASSWORD}
+    DBT_PG_DBNAME: warehouse
     CENSUS_API_KEY: ${CENSUS_API_KEY:-}   # optional; ACS demographics are skipped without it
   volumes:
     - ./airflow/dags:/opt/airflow/dags:ro
     - ./src:/opt/airflow/src:ro
+    - ./dbt:/opt/airflow/dbt:ro
     - airflow-logs:/opt/airflow/logs
   depends_on: &airflow-depends
     postgres:
@@ -49,7 +55,7 @@ x-spark-common: &spark-common
   # Official Spark image + Delta Lake + S3A jars (docker/spark/Dockerfile)
   build:
     context: docker/spark
-  image: atl-transit/spark:4.2.1-delta4.4.1
+  image: atl-transit/spark:4.2.1-delta4.4.1-2
   environment: &spark-env
     SPARK_NO_DAEMONIZE: "true"
     # S3A reads lake credentials from the standard AWS env vars (keeps secrets out of process arguments)

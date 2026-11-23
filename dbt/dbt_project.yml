@@ -1,0 +1,26 @@
+name: atl_transit
+version: "1.0.0"
+config-version: 2
+profile: atl_transit
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+
+models:
+  atl_transit:
+    staging:
+      +schema: staging
+      +materialized: view        # thin renaming/typing layer, always current
+    intermediate:
+      +schema: staging
+      +materialized: table       # spatial join, computed once per build
+    marts:
+      +schema: marts
+      +materialized: table       # what BI tools query
+
+vars:
+  on_time_early_s: -60           # more than 1 min early = early
+  on_time_late_s: 300            # more than 5 min late = late (common transit on-time window)
+  fct_lookback_days: 3           # incremental rebuild window; matches the warehouse load lookback
+  max_abs_delay_s: 10800         # |delay| > 3 h is treated as a data error, not a real delay

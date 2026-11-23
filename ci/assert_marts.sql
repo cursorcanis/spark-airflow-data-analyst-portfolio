@@ -1,0 +1,16 @@
+-- Checks on the fixture's known answers (psql exits non-zero on the first failed check via ON_ERROR_STOP + division by zero).
+\set ON_ERROR_STOP on
+-- 3 scheduled arrivals kept, unscheduled one dropped
+SELECT 1 / (CASE WHEN (SELECT count(*) FROM marts.fct_stop_arrival) = 3 THEN 1 ELSE 0 END) AS fct_rows_ok;
+-- classification: 1 on time, 1 late, 1 early
+SELECT 1 / (CASE WHEN (SELECT count(*) FILTER (WHERE is_on_time) || '-' || count(*) FILTER (WHERE is_late)
+                       || '-' || count(*) FILTER (WHERE is_early) FROM marts.fct_stop_arrival) = '1-1-1'
+            THEN 1 ELSE 0 END) AS classification_ok;
+-- spatial join: Five Points stop inside the tract, the far stop outside
+SELECT 1 / (CASE WHEN (SELECT tract_geoid FROM marts.dim_stop WHERE stop_id = 'S1') = '13121011901'
+                  AND (SELECT tract_geoid FROM marts.dim_stop WHERE stop_id = 'S2') IS NULL THEN 1 ELSE 0 END) AS spatial_ok;
+-- ACS derived metric: (20 + 394) / 1000 = 41.4 %
+SELECT 1 / (CASE WHEN (SELECT pct_households_no_vehicle FROM marts.dim_tract) = 41.4 THEN 1 ELSE 0 END) AS acs_ok;
+-- scheduled hour in Atlanta local time: 13:00 UTC = 08 EST
+SELECT 1 / (CASE WHEN (SELECT scheduled_hour_local FROM marts.fct_stop_arrival WHERE trip_id='T1' AND stop_sequence=1) = 8
+            THEN 1 ELSE 0 END) AS local_hour_ok;

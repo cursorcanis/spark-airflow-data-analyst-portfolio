@@ -15,3 +15,8 @@ __pycache__/
 # Runtime data (lives in Docker volumes on the server)
 data/
 logs/
+
+# dbt build artifacts
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/

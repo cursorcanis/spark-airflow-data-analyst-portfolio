@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: stg_gtfs__routes
+    columns:
+      - name: route_id
+        data_tests: [unique, not_null]
+      - name: route_mode
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["tram", "subway", "rail", "bus", "other"]
+  - name: stg_gtfs__stops
+    columns:
+      - name: stop_id
+        data_tests: [unique, not_null]
+  - name: stg_gtfs__trips
+    columns:
+      - name: trip_id
+        data_tests: [unique, not_null]
+  - name: stg_rt__stop_arrivals
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [service_date, trip_id, stop_sequence]
+  - name: stg_census__acs
+    columns:
+      - name: geoid
+        data_tests: [unique, not_null]

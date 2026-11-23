@@ -202,3 +202,37 @@ def curate_rt_hour(spark: SparkSession, raw_base: str, curated_base: str, date: 
     stats["arrivals_unscheduled"] = arrivals.filter(~F.col("has_schedule")).count()
     merge_stop_arrivals(spark, arrivals, f"{curated_base}/stop_arrivals")
     return stats
+
+
+# ------------------------------------------------------------------ export to the Postgres warehouse
+# Spark executors write each table into a *load* table (raw._load_<name>, dropped and recreated).
+# Airflow then publishes it into the real table inside ONE Postgres transaction (see warehouse_sql),
+# so dbt and BI users never see a half-loaded table.
+WAREHOUSE_STATIC_TABLES = ["routes", "stops", "trips", "stop_times", "calendar", "calendar_dates", "shapes"]
+
+
+def write_load_table(df: DataFrame, load_table: str, jdbc: dict) -> None:
+    (df.write.format("jdbc")
+       .option("url", jdbc["url"]).option("user", jdbc["user"]).option("password", jdbc["password"])
+       .option("driver", "org.postgresql.Driver")
+       .option("dbtable", load_table)
+       .option("batchsize", "10000")      # rows per INSERT batch
+       .option("numPartitions", "4")      # max parallel JDBC connections
+       .mode("overwrite").save())
+
+
+def export_gtfs_static(spark: SparkSession, curated_base: str, jdbc: dict) -> dict[str, int]:
+    counts = {}
+    for table in WAREHOUSE_STATIC_TABLES:
+        df = spark.read.format("delta").load(f"{curated_base}/gtfs_static/{table}")
+        write_load_table(df, f"raw._load_gtfs_{table}", jdbc)
+        counts[table] = df.count()
+    return counts
+
+
+def export_stop_arrivals_window(spark: SparkSession, curated_base: str, jdbc: dict, cutoff_date: str) -> int:
+    """Lookback window: re-export every service_date >= cutoff (late MERGE updates land in recent days)."""
+    df = (spark.read.format("delta").load(f"{curated_base}/stop_arrivals")
+          .filter(F.col("service_date") >= F.to_date(F.lit(cutoff_date))))
+    write_load_table(df, "raw._load_rt_stop_arrivals", jdbc)
+    return df.count()

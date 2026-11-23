@@ -1,0 +1,79 @@
+version: 2
+
+models:
+  - name: dim_route
+    description: One row per MARTA route in the current GTFS feed.
+    columns:
+      - name: route_id
+        data_tests: [unique, not_null]
+
+  - name: dim_stop
+    description: One row per stop, with its Census tract (PostGIS point-in-polygon).
+    columns:
+      - name: stop_id
+        data_tests: [unique, not_null]
+
+  - name: dim_tract
+    description: Census tracts of the 11-county Atlanta region with ACS 5-year demographics.
+    columns:
+      - name: geoid
+        data_tests: [unique, not_null]
+      - name: pct_households_no_vehicle
+        data_tests:
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 100}
+
+  - name: dim_date
+    columns:
+      - name: date_day
+        data_tests: [unique, not_null]
+
+  - name: fct_stop_arrival
+    description: >
+      One row per observed arrival of a scheduled trip at a stop. delay_s = observed - scheduled;
+      on time = between on_time_early_s and on_time_late_s (vars in dbt_project.yml).
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [service_date, trip_id, stop_sequence]
+    columns:
+      - name: route_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_route'), field: route_id}
+      - name: stop_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_stop'), field: stop_id}
+      - name: service_date
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_date'), field: date_day}
+      - name: delay_s
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: -10800, max_value: 10800}
+
+  - name: mart_route_on_time_daily
+    description: Daily on-time performance per route.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [service_date, route_id]
+    columns:
+      - name: pct_on_time
+        data_tests:
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 100}
+
+  - name: mart_on_time_by_hour
+    description: On-time performance by scheduled local hour, weekday vs weekend.
+
+  - name: mart_tract_service_equity
+    description: Per-tract reliability next to demographics (car-free households, income, poverty).
+    columns:
+      - name: geoid
+        data_tests: [unique, not_null]
