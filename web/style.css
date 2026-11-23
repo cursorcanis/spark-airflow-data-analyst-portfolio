@@ -49,6 +49,7 @@ body {
 h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.01em; }
 h2 { font-size: 13px; margin: 18px 0 6px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
 .sub { margin: 0; color: var(--text-secondary); }
+#gps-note { font-size: 12px; margin-bottom: 12px; }
 a { color: var(--accent); }
 .muted { color: var(--text-muted); font-size: 12px; }
 
@@ -61,7 +62,8 @@ fieldset { border: 0; padding: 0; margin: 0; }
 .layers legend { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
 .layers > label { display: block; padding: 4px 0; cursor: pointer; }
 #tract-metric { margin: 2px 0 0 22px; font-size: 13px; color: var(--text-secondary); }
-#tract-metric label { margin-left: 6px; cursor: pointer; color: var(--text-primary); }
+#tract-metric .cb { display: block; }
+#tract-metric label { margin-right: 10px; cursor: pointer; color: var(--text-primary); }
 
 #legend { margin-top: 12px; }
 #legend .title { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }

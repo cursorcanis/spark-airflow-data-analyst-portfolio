@@ -65,13 +65,22 @@ gps as (
         round(100.0 * sum(arrivals) filter (where gps_class = 'on_time')
               / nullif(sum(arrivals) filter (where gps_class <> 'not_confirmed'), 0), 1) as pct_on_time_gps,
         round(100.0 * sum(arrivals) filter (where gps_class <> 'not_confirmed') / nullif(sum(arrivals), 0), 1)
-            as pct_gps_confirmed
+            as pct_gps_confirmed,
+        -- early/late shares on the GPS-confirmed subset, by the feed's clock and by the GPS clock
+        round(100.0 * sum(arrivals) filter (where gps_class <> 'not_confirmed' and feed_class = 'early')
+              / nullif(sum(arrivals) filter (where gps_class <> 'not_confirmed'), 0), 1) as pct_early_feed,
+        round(100.0 * sum(arrivals) filter (where gps_class = 'early')
+              / nullif(sum(arrivals) filter (where gps_class <> 'not_confirmed'), 0), 1) as pct_early_gps,
+        round(100.0 * sum(arrivals) filter (where gps_class <> 'not_confirmed' and feed_class = 'late')
+              / nullif(sum(arrivals) filter (where gps_class <> 'not_confirmed'), 0), 1) as pct_late_feed,
+        round(100.0 * sum(arrivals) filter (where gps_class = 'late')
+              / nullif(sum(arrivals) filter (where gps_class <> 'not_confirmed'), 0), 1) as pct_late_gps
     from marts.mart_gps_validation
 ),
 worst as (
     select json_agg(w order by w.pct_on_time) as worst_routes from (
         select route_short_name as route, sum(arrivals) as arrivals,
-               round(100.0 * sum(arrivals * pct_on_time) / sum(arrivals), 1) as pct_on_time
+               round(sum(arrivals * pct_on_time) / sum(arrivals), 1) as pct_on_time
         from marts.mart_route_on_time_daily
         group by 1 having sum(arrivals) >= 300
         order by 3 limit 5) as w

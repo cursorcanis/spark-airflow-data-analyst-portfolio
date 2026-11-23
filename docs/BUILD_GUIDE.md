@@ -660,7 +660,8 @@ Airflow calls `/home/airflow/dbt-venv/bin/dbt` from a `BashOperator`. The projec
 **Replay CI locally** (same steps, throwaway containers):
 ```bash
 docker network create dbtci
-docker run -d --name dbtci-pg --network dbtci -e POSTGRES_USER=ci -e POSTGRES_PASSWORD=ci -e POSTGRES_DB=warehouse postgis/postgis:17-3.7
+docker build -t atl-transit/postgres:17-3.7-h3 docker/postgres     # PostGIS + H3 (Phase 4)
+docker run -d --name dbtci-pg --network dbtci -e POSTGRES_USER=ci -e POSTGRES_PASSWORD=ci -e POSTGRES_DB=warehouse atl-transit/postgres:17-3.7-h3
 docker exec -i dbtci-pg psql -U ci -d warehouse < ci/seed_warehouse.sql
 docker run --rm --network dbtci -v $PWD/dbt:/dbt:ro -e DBT_PG_HOST=dbtci-pg -e DBT_PG_USER=ci -e DBT_PG_PASSWORD=ci \
   -e DBT_PG_DBNAME=warehouse -e DBT_PROFILES_DIR=/dbt -e DBT_PROJECT_DIR=/dbt -e DBT_TARGET_PATH=/tmp/t -e DBT_LOG_PATH=/tmp/l \
@@ -688,3 +689,139 @@ New images for Spark and Airflow at once. Roll them out **in stages** (Spark ser
 ## Updated 60-second pitch (add)
 
 > "...Spark loads curated tables into Postgres over JDBC into staging tables, and Airflow publishes them in a single transaction. dbt then builds a tested star schema: staging views, a PostGIS point-in-polygon join that puts every stop in its Census tract, an incremental fact table of observed arrivals, and marts for on-time performance by route, hour and neighborhood demographics. 32 data tests plus source freshness run on every build, and CI runs the whole dbt project twice against a real PostGIS container with known-answer assertions."
+
+---
+
+# Phase 4: Geospatial + BI
+
+Goal: answer *where* buses are slow and lose time, check whether the feed's "arrival" is real, and serve the
+results to people: a **public web map**, a **Power BI** report over a read-only login, and published **dbt docs**.
+
+```
+curated Delta (lake) ──Spark──> raw.rt_vehicle_pings ─┐                 ┌─> web/data/*.geojson ─> GitHub Pages map
+                     └─Spark──> raw.rt_arrival_gps_check ┼─ dbt (PostGIS + H3) ─> marts ─┤
+existing raw tables ─────────────────────────────────┘                 └─> Power BI (role `reporting`, via Tailscale)
+```
+
+## Step 37: Validate the "passed stop = arrival" assumption with GPS (Spark)
+
+Phase 2 took an arrival as "the last time the trip-updates feed reported this stop with a time in the past".
+18% of arrivals came out *early*, which is suspicious. The vehicle-positions feed gives an independent check: the bus's own GPS track.
+
+`prepare_arrival_gps_check(arrivals, pings, stops)` in `src/atl_transit/spark_jobs.py`:
+1. Join each arrival to its stop's coordinates.
+2. **Range join** to the same trip's GPS fixes within ±20 minutes of the reported time:
+   `a.trip_id = p.trip_id AND p.ping_epoch BETWEEN a.obs_epoch - 1200 AND a.obs_epoch + 1200` (left join, so arrivals without GPS survive).
+3. **Haversine distance** from each fix to the stop, written as a plain column expression (`sin`, `cos`, `asin`, `sqrt`): no Python UDF, so it runs on the JVM through Spark Connect.
+4. `groupBy(arrival).agg(count, min(dist), min_by(ping_epoch, dist))`. `min_by` returns the time of the *closest* fix in one pass, with no window function.
+5. `gps_offset_s` = reported arrival − closest-fix time. `gps_confirmed` = a fix came within 150 m of the stop. Fixes arrive ~30 s apart, so the closest one is within ~15 s of the true pass.
+
+`prepare_vehicle_pings(vp)`: `lag()` over `Window.partitionBy("vehicle_id").orderBy("vehicle_ts")` gives the previous fix. Speed = distance / time, kept only when it's the **same trip**, the gap is 5–300 s and the speed is ≤ 35 m/s. Otherwise it's NULL, so GPS jumps and layovers don't skew averages.
+
+**Prototype first:** before wiring anything into Airflow, run the functions ad hoc through Spark Connect (`get_spark()` from inside the Airflow container) and look at the numbers. That's how the finding below was spotted.
+
+## Step 38: Load GPS tables daily (time-based DAG)
+
+`warehouse_load_rt_gps` (in `airflow/dags/warehouse_load.py`), cron `30 4 * * *` in `America/New_York`:
+- `spark_export`: `export_rt_gps_window` writes `raw._load_rt_vehicle_pings` and `raw._load_rt_arrival_gps_check` for dates ≥ today − 2.
+- `publish`: both lookback-window refreshes run in **one transaction**, so the two tables always cover the same days. Emits the `WAREHOUSE_RT_GPS` asset, which is added to `dbt_build`'s AssetAny.
+
+Why cron and not an asset trigger: re-reading days of GPS fixes is too heavy to repeat every hour, and 04:30 is MARTA's quietest time. **Mixing time-based and data-aware schedules** in one pipeline is normal: the asset event still tells dbt when to rebuild.
+
+## Step 39: Add H3 to Postgres (custom image)
+
+**H3** (Uber's hierarchical hexagonal grid) gives every point on Earth a cell id at 16 resolutions. Hexagons have equal-distance neighbors and near-equal areas, which makes them better than squares or tracts for aggregating movement. Resolution 8 ≈ 0.74 km², edge ≈ 460 m.
+
+`docker/postgres/Dockerfile`:
+```dockerfile
+FROM postgis/postgis:17-3.7
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-17-h3 && rm -rf /var/lib/apt/lists/*
+```
+The official Postgres images already have the **PGDG apt repository**, which packages `h3-pg`. Check that it's available first: `docker exec <pg> bash -c "apt-get update -qq; apt-cache policy postgresql-17-h3"`.
+
+`docker/postgres/init/02-warehouse-extras.sh` (idempotent; also run by hand on an existing volume):
+- `CREATE EXTENSION h3; CREATE EXTENSION h3_postgis CASCADE;` Extensions run C code, so a superuser installs them. After that, the `warehouse` role just calls the functions.
+- The read-only role (Step 41).
+
+Functions used: `h3_lat_lng_to_cell(geometry, 8)` (point → cell) and `h3_cell_to_boundary_geometry(cell)` (cell → hexagon polygon). The `geometry` overloads come from `h3_postgis` and avoid the ambiguous (lat, lng) vs (x, y) order of the plain `point` type.
+
+**Deploying it** (data volume kept):
+```bash
+docker compose build postgres && docker compose up -d postgres      # recreate with the new image, same volume
+docker compose exec postgres bash /docker-entrypoint-initdb.d/02-warehouse-extras.sh
+```
+
+## Step 40: dbt models for Phase 4
+
+| Model | What it does |
+|---|---|
+| `stg_rt__vehicle_pings` | km/h, `event_at` timestamptz, `h3_cell` |
+| `stg_rt__arrival_gps_check` | typed GPS check |
+| `dim_stop` (+ `h3_cell`) | every stop's hexagon, to join stops to GPS speeds |
+| `fct_vehicle_ping` | incremental, `unique_key='event_date'` + delete+insert = **replace whole days**; `is_stopped` (< 2 km/h), `is_weekday_peak` (vars) |
+| `mart_h3_bus_speed` | per hexagon: median *moving* speed (all day and weekday peak; `percentile_cont ... FILTER (WHERE ...)`), % of samples stopped, on-time % of the stops inside, hexagon polygon |
+| `mart_segment_delay` | `lag()` over each trip's arrivals by `stop_sequence`. For **truly consecutive** stops, delay added = delay here − delay at the previous stop. Grouped per directed stop pair, with `string_agg(DISTINCT route ...)` and a line geometry (`ST_MakeLine`) |
+| `mart_gps_validation` | **confusion matrix**: the feed's class (early / on time / late) × the class using the GPS pass time (`delay_s − gps_offset_s`), or `not_confirmed` |
+
+Also: `+grants: {select: ["reporting"]}` on the marts folder. dbt re-applies grants after every rebuild, so a recreated table never loses its BI permission. New tests: composite uniqueness on pings / segments / the matrix, a speed range, freshness on pings (warn 30 h, error 54 h for a daily load).
+
+## Step 41: Read-only `reporting` role for BI
+
+In `02-warehouse-extras.sh`:
+```sql
+SELECT 'CREATE ROLE reporting LOGIN' WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'reporting') \gexec
+ALTER ROLE reporting WITH LOGIN PASSWORD :'reporting_pw';
+ALTER ROLE reporting SET default_transaction_read_only = on;   -- belt and braces
+ALTER ROLE reporting SET statement_timeout = '120s';           -- a bad BI query can't hog the laptop
+GRANT CONNECT ON DATABASE warehouse TO reporting;
+GRANT USAGE ON SCHEMA marts TO reporting;                      -- table SELECT comes from dbt grants
+```
+- `\gexec` runs the generated statement: an idempotent `CREATE ROLE` (Postgres has no `CREATE ROLE IF NOT EXISTS`).
+- The password lives in `.env` (`REPORTING_DB_PASSWORD`) and reaches the container as an env var. The psql variable `:'reporting_pw'` quotes it safely.
+- **Least privilege in layers:** schema USAGE + table SELECT only on `marts`, a read-only session default, a timeout, and network access only over Tailscale.
+
+## Step 42: Power BI report
+
+Step-by-step in [`bi/powerbi/README.md`](../bi/powerbi/README.md): connect (PostgreSQL connector, Import mode, user `reporting`, server = Tailscale IP), remove geometry columns in Power Query, build the star in Model view (single-direction relationships, mark `dim_date` as a date table), add the DAX measures from [`bi/powerbi/measures.dax`](../bi/powerbi/measures.dax), apply the theme, build 5 pages, and save as **.pbip** (text-based, diffable in git).
+
+## Step 43: Public web map (MapLibre on GitHub Pages)
+
+- **Export** (`src/atl_transit/webmap.py`): PostGIS builds each GeoJSON `FeatureCollection` itself (`json_build_object` + `json_agg` + `ST_AsGeoJSON(geom, 5)` = 5 decimals ≈ 1 m). Tract polygons are simplified (`ST_SimplifyPreserveTopology`). Minimum sample sizes (≥30 speed samples per hexagon, ≥15 traversals per segment, ≥50 arrivals per tract) keep noise off the map. `summary.json` holds the headline numbers.
+- **Snapshot** (`scripts/refresh_webmap_data.sh`): runs the export *on the server*, inside the Airflow container (which can reach Postgres), and streams the files back over SSH as a tar archive. Then commit `web/data/` and push.
+  ```bash
+  ATL_SERVER=user@host scripts/refresh_webmap_data.sh && git add web/data && git commit -m "Map snapshot" && git push
+  ```
+- **Page** (`web/`): plain HTML + JS, MapLibre GL JS 4.7.1 from a CDN, a free vector basemap (OpenFreeMap, no API key). Three layers (hexagon speed, segment delay lines, tract choropleth with an on-time / car-free toggle), hover tooltips, legends, headline stats and the worst-routes table. Data layers sit **under** the basemap labels (`addLayer(..., firstSymbolLayerId)`).
+- **Colors:** a single-hue blue ramp for magnitudes (dark = worse) and blue ↔ gray ↔ red for gaining vs losing time, both checked for lightness steps and color-blind safety.
+- **Testing it headless:** headless Chrome's `--virtual-time-budget` never finishes loading the basemap. Instead, drive Chrome over the DevTools protocol (`--remote-debugging-port`), wait in real time until `map.loaded()`, check `queryRenderedFeatures().length > 0`, then take a screenshot.
+
+## Step 44: Publish the map + dbt docs from CI (GitHub Pages)
+
+`.github/workflows/ci.yml`:
+- The `dbt` job no longer uses a service container: it **builds `docker/postgres`** and runs it, so CI has exactly production's extensions (PostGIS + H3). Fixtures now include GPS pings and GPS checks, and `ci/assert_marts.sql` checks the new known answers (the "early" arrival that GPS shows was on time, a 480 s segment delay, the hexagon's 3 fixes / 50% stopped / 12 km/h / 2 arrivals, and the `reporting` grants).
+- After the tests: `dbt docs generate --static` → one self-contained HTML file (manifest + catalog inlined). The job assembles `_site/` = `web/` + `dbt/index.html` and uploads it with `actions/upload-pages-artifact`.
+- A `pages` job (`needs: [test, dbt]`, only on pushes to `main`, permissions `pages: write` + `id-token: write`) runs `actions/deploy-pages`. Turn Pages on once with **Settings → Pages → Source: GitHub Actions** (or `gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow`).
+
+Live: https://cursorcanis.github.io/spark-airflow-data-analyst-portfolio/ (map) and `/dbt/` (docs + lineage graph).
+
+## Step 45: Operations gotchas from Phase 4
+
+1. **Stale bind mount.** After a `git pull`, the Airflow container saw an **empty** `/opt/airflow/dbt`: the directory had been replaced on the host (new inode) and the container still held the old, deleted one. Fix: `docker compose up -d --force-recreate --no-deps airflow-scheduler airflow-dag-processor airflow-apiserver`. Check with `docker compose exec airflow-scheduler ls /opt/airflow/dbt`.
+2. **Order of first deploy:** pause `dbt_build`, run the new load once (`airflow dags trigger warehouse_load_rt_gps`), then unpause and trigger dbt. This avoids the Phase 3 "relation does not exist" race for the new sources.
+3. **Python version of the Spark image is 3.10:** `datetime.UTC` (3.11+) doesn't exist there. Pipeline code shipped to executors must stay 3.10-compatible (tests run on 3.12 in CI).
+
+## Phase 4 results
+
+| | |
+|---|---|
+| dbt build | **63 / 63 pass** |
+| Arrivals / GPS fixes | 81,461 arrivals; 197,633 GPS fixes (2026-11-22 → 23) |
+| GPS confirmation | 76.3% of arrivals have a GPS fix within 150 m of the stop |
+| **Feed vs GPS** (confirmed arrivals) | early **16.7% → 10.3%**, late **15.9% → 20.1%**, on time 67.4% → 69.6%. The feed's "passed" times run ahead of the bus (median −15 s, −126 s for "early" arrivals that GPS shows on time). |
+| Speed | 1,357 hexagons with data. Moving speed within 5 km of Downtown/Midtown ≈ 24 km/h vs 35 km/h elsewhere |
+| Segments | 6,256 stop pairs (1,841 with ≥15 traversals); median delay added −8 s: delay builds in a few hot spots and is slowly recovered elsewhere |
+| Equity (more data) | Tracts ≥20% car-free 66.8% on time vs 66.5% for <10%: **no gap** (the Phase 3 difference was noise from ~1 day of data) |
+
+## Updated 60-second pitch (add)
+
+> "...I didn't trust one feed's definition of an arrival, so I validated it against the other: a Spark range join matches every reported arrival to the bus's GPS track and finds the closest fix to the stop. It showed the feed's times run ahead of the bus, so 'early' is overstated and 'late' understated. I added H3 hexagons in PostGIS to map moving speed, a stop-to-stop model of where buses lose time, and a read-only role for Power BI. CI builds the same Postgres image with H3, tests every model against fixtures with known answers, and publishes a public MapLibre map and the dbt docs to GitHub Pages."

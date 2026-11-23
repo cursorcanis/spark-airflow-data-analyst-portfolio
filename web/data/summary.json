@@ -1,0 +1,5 @@
+{"first_service_date" : "2026-11-22", "last_service_date" : "2026-11-23", "arrivals" : 81461, "routes_observed" : 71, "pct_on_time" : 67.2, "pct_early" : 16.5, "pct_late" : 16.4, "gps_fixes" : 197633, "gps" : {"pct_feed_early_actually_on_time":46.8,"pct_on_time_gps":69.6,"pct_gps_confirmed":76.3,"pct_early_feed":16.7,"pct_early_gps":10.3,"pct_late_feed":15.9,"pct_late_gps":20.1}, "worst_routes" : [{"route":"20","arrivals":829,"pct_on_time":26.3}, 
+ {"route":"165","arrivals":800,"pct_on_time":39.4}, 
+ {"route":"46","arrivals":416,"pct_on_time":43.3}, 
+ {"route":"187","arrivals":389,"pct_on_time":44.8}, 
+ {"route":"23","arrivals":2365,"pct_on_time":48.4}], "exported_at" : "2026-11-23T21:06:39.221725+00:00"}

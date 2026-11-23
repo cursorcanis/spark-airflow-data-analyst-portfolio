@@ -1,0 +1,52 @@
+// DAX measures for the ATL transit Power BI report. Create them in a "_Measures" table:
+// Modeling > New table:  _Measures = { BLANK() }   then right-click it > New measure, one per block below.
+// Format the % measures as Percentage with 1 decimal.
+
+Arrivals =
+COUNTROWS ( fct_stop_arrival )
+
+On-time % =
+DIVIDE (
+    CALCULATE ( [Arrivals], fct_stop_arrival[is_on_time] = TRUE () ),
+    [Arrivals]
+)
+
+Late % =
+DIVIDE ( CALCULATE ( [Arrivals], fct_stop_arrival[is_late] = TRUE () ), [Arrivals] )
+
+Early % =
+DIVIDE ( CALCULATE ( [Arrivals], fct_stop_arrival[is_early] = TRUE () ), [Arrivals] )
+
+Median delay (min) =
+MEDIAN ( fct_stop_arrival[delay_min] )
+
+P90 delay (min) =
+PERCENTILE.INC ( fct_stop_arrival[delay_min], 0.9 )
+
+// Gap to the whole network: REMOVEFILTERS drops the route filter coming from the visual.
+On-time % vs network =
+[On-time %] - CALCULATE ( [On-time %], REMOVEFILTERS ( dim_route ) )
+
+// Rolling 7 days ending at the last date in context (needs dim_date marked as the date table).
+On-time % (7-day) =
+CALCULATE (
+    [On-time %],
+    DATESINPERIOD ( dim_date[date_day], MAX ( dim_date[date_day] ), -7, DAY )
+)
+
+// Iterates routes: how many of the routes in the current filter run below 60 % on time.
+Routes below 60% =
+COUNTROWS ( FILTER ( VALUES ( dim_route[route_id] ), [On-time %] < 0.6 ) )
+
+// From the GPS validation mart: on-time share when the bus's own GPS pass time is used.
+GPS-checked on-time % =
+DIVIDE (
+    CALCULATE ( SUM ( mart_gps_validation[arrivals] ), mart_gps_validation[gps_class] = "on_time" ),
+    CALCULATE ( SUM ( mart_gps_validation[arrivals] ), mart_gps_validation[gps_class] <> "not_confirmed" )
+)
+
+GPS confirmed % =
+DIVIDE (
+    CALCULATE ( SUM ( mart_gps_validation[arrivals] ), mart_gps_validation[gps_class] <> "not_confirmed" ),
+    SUM ( mart_gps_validation[arrivals] )
+)

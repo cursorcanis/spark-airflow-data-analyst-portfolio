@@ -20,10 +20,10 @@ const LAYERS = {
   speed: {
     source: "h3", type: "fill",
     legend: { title: "Median moving bus speed (km/h)", kind: "fill",
-      items: [["under 10", BLUE[4]], ["10 – 14", BLUE[3]], ["14 – 18", BLUE[2]], ["18 – 24", BLUE[1]], ["24 or more", BLUE[0]]] },
-    paint: { "fill-color": step("speed_kmh", [10, 14, 18, 24], [BLUE[4], BLUE[3], BLUE[2], BLUE[1], BLUE[0]]),
+      items: [["under 20", BLUE[4]], ["20 – 25", BLUE[3]], ["25 – 32", BLUE[2]], ["32 – 40", BLUE[1]], ["40 or more", BLUE[0]]] },
+    paint: { "fill-color": step("speed_kmh", [20, 25, 32, 40], [BLUE[4], BLUE[3], BLUE[2], BLUE[1], BLUE[0]]),
              "fill-opacity": 0.72, "fill-outline-color": "rgba(255,255,255,0.6)" },
-    finding: () => "Each hexagon is about 0.7 km² (H3 resolution 8). Dark hexagons are where buses crawl: downtown, Midtown and the busiest arterials. Stops and layovers are excluded from the speed (they're the “% stopped” in the tooltip).",
+    finding: () => "Each hexagon is about 0.7 km² (H3 resolution 8). Within 5 km of Downtown/Midtown buses average about 24 km/h while moving, vs 35 km/h in the rest of the region. Time spent stopped (stops, signals, layovers) is left out of the speed and shown as “% stopped” in the tooltip.",
     tip: (p) => `<b>H3 ${p.h3}</b><br><span class="k">Median moving speed</span> ${fmt(p.speed_kmh, 1)} km/h
       <br><span class="k">Weekday peak</span> ${fmt(p.peak_speed_kmh, 1)} km/h<br><span class="k">Stopped</span> ${pct(p.pct_stopped)} of GPS samples
       <br><span class="k">Routes</span> ${p.routes} · <span class="k">stops</span> ${p.stops}<br><span class="k">On time at stops here</span> ${pct(p.pct_on_time)}`,
@@ -37,7 +37,7 @@ const LAYERS = {
              "line-width": ["interpolate", ["linear"], ["get", "n"], 15, 1.5, 200, 3.5, 1000, 6],
              "line-opacity": 0.9 },
     layout: { "line-cap": "round" },
-    finding: () => "Each line is a stop-to-stop hop. The color is how much later than schedule buses get between the two stops, so red is where they lose time and blue is where padded schedules let them catch up. Thicker lines have more observations.",
+    finding: () => "Each line is a stop-to-stop hop. Its color is how much later than schedule buses get between the two stops: red is where they lose time, blue is where padded schedules let them catch up. Most hops are slightly blue: delay is mostly built up in a few hot spots, then slowly recovered. Thicker lines have more observations.",
     tip: (p) => `<b>${p.from} → ${p.to}</b><br><span class="k">Routes</span> ${p.routes}
       <br><span class="k">Avg delay added</span> ${fmt(p.avg_added_s)} s (median ${fmt(p.median_added_s)} s)
       <br><span class="k">Observations</span> ${fmt(p.n)} · ${fmt(p.length_m)} m`,
@@ -46,8 +46,8 @@ const LAYERS = {
     source: "tracts", type: "fill",
     metrics: {
       pct_on_time: { title: "Bus arrivals on time at the tract's stops", kind: "fill",
-        items: [["under 60%", BLUE[4]], ["60 – 65%", BLUE[3]], ["65 – 70%", BLUE[2]], ["70 – 75%", BLUE[1]], ["75% or more", BLUE[0]], ["too few arrivals", "#e3e2dd"]],
-        color: step("pct_on_time", [60, 65, 70, 75], [BLUE[4], BLUE[3], BLUE[2], BLUE[1], BLUE[0]]) },
+        items: [["under 55%", BLUE[4]], ["55 – 62%", BLUE[3]], ["62 – 70%", BLUE[2]], ["70 – 77%", BLUE[1]], ["77% or more", BLUE[0]], ["too few arrivals", "#e3e2dd"]],
+        color: step("pct_on_time", [55, 62, 70, 77], [BLUE[4], BLUE[3], BLUE[2], BLUE[1], BLUE[0]]) },
       pct_no_car: { title: "Households without a car (ACS 5-year)", kind: "fill",
         items: [["under 5%", BLUE[0]], ["5 – 10%", BLUE[1]], ["10 – 20%", BLUE[2]], ["20 – 35%", BLUE[3]], ["35% or more", BLUE[4]], ["no data", "#e3e2dd"]],
         color: step("pct_no_car", [5, 10, 20, 35], BLUE) },
@@ -70,6 +70,8 @@ const map = new maplibregl.Map({
   attributionControl: { compact: true, customAttribution: "Data: MARTA GTFS/GTFS-rt, U.S. Census Bureau" },
 });
 map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+// On wide screens the panel covers the left of the map: pad the viewport so the region stays centered.
+if (window.matchMedia("(min-width: 721px)").matches) map.setPadding({ left: 360 });
 
 function tractPaint() {
   const m = LAYERS.tracts.metrics[tractMetric];
@@ -137,6 +139,13 @@ getJSON("data/summary.json").then((s) => {
   document.getElementById("s-ontime").textContent = pct(s.pct_on_time);
   document.getElementById("s-gps").textContent = pct(s.gps && s.gps.pct_on_time_gps);
   document.getElementById("s-arrivals").textContent = fmt(s.arrivals);
+  const g = s.gps || {};
+  if (g.pct_early_gps !== undefined) {
+    document.getElementById("gps-note").textContent =
+      `GPS check: ${pct(g.pct_gps_confirmed)} of arrivals have a GPS fix at the stop. On those, the bus's own GPS pass time ` +
+      `cuts “early” from ${pct(g.pct_early_feed)} to ${pct(g.pct_early_gps)} and raises “late” from ` +
+      `${pct(g.pct_late_feed)} to ${pct(g.pct_late_gps)}: the feed's times run ahead of the bus.`;
+  }
   document.getElementById("daterange").textContent = `Service days ${s.first_service_date} to ${s.last_service_date}.`;
   document.getElementById("exported").textContent = `Snapshot exported ${String(s.exported_at).slice(0, 16).replace("T", " ")} UTC · ${fmt(s.gps_fixes)} GPS fixes`;
   document.querySelector("#worst tbody").innerHTML = (s.worst_routes || []).map((w) =>

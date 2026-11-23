@@ -21,3 +21,10 @@ dbt/target/
 dbt/logs/
 dbt/dbt_packages/
 dbt/.user.yml
+
+# Power BI project local files
+bi/**/.pbi/localSettings.json
+bi/**/.pbi/cache.abf
+
+# The web map snapshot IS published (GitHub Pages)
+!web/data/

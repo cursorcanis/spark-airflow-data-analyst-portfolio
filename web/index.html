@@ -19,10 +19,11 @@
     </header>
 
     <section class="stats" aria-label="Headline numbers">
-      <div class="stat"><span class="v" id="s-ontime">–</span><span class="l">arrivals on time<br>(feed, −1/+5 min)</span></div>
-      <div class="stat"><span class="v" id="s-gps">–</span><span class="l">on time when checked<br>against bus GPS</span></div>
+      <div class="stat"><span class="v" id="s-ontime">–</span><span class="l">on time by feed<br>(−1 / +5 min)</span></div>
+      <div class="stat"><span class="v" id="s-gps">–</span><span class="l">on time by<br>bus GPS</span></div>
       <div class="stat"><span class="v" id="s-arrivals">–</span><span class="l">observed arrivals</span></div>
     </section>
+    <p id="gps-note" class="sub"></p>
 
     <fieldset class="layers">
       <legend>Map layer</legend>
@@ -30,7 +31,7 @@
       <label><input type="radio" name="layer" value="segments"> Where buses lose time</label>
       <label><input type="radio" name="layer" value="tracts"> Neighborhoods (Census tracts)</label>
       <div id="tract-metric" hidden>
-        <span>Color by</span>
+        <span class="cb">Color by</span>
         <label><input type="radio" name="tmetric" value="pct_on_time" checked> on time</label>
         <label><input type="radio" name="tmetric" value="pct_no_car"> car-free households</label>
       </div>
