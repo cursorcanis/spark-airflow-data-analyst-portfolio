@@ -139,6 +139,78 @@ def prepare_stop_arrivals(trip_updates: DataFrame, stop_times: DataFrame) -> Dat
             .select(*ARRIVAL_COLUMNS))
 
 
+# ------------------------------------------------------------------ GPS-derived tables (Phase 4)
+EARTH_RADIUS_M = 6371000.0
+
+
+def haversine_m(lat1, lon1, lat2, lon2):
+    """Great-circle distance in metres between two lat/lon columns (pure column expression, no UDF)."""
+    dlat = F.radians(lat2 - lat1)
+    dlon = F.radians(lon2 - lon1)
+    a = F.sin(dlat / 2) ** 2 + F.cos(F.radians(lat1)) * F.cos(F.radians(lat2)) * F.sin(dlon / 2) ** 2
+    return F.lit(2 * EARTH_RADIUS_M) * F.asin(F.sqrt(a))
+
+
+PING_COLUMNS = ["event_date", "event_ts", "vehicle_ts", "vehicle_id", "trip_id", "route_id", "direction_id",
+                "latitude", "longitude", "reported_speed_mps", "calc_speed_mps", "secs_since_prev"]
+MAX_BUS_SPEED_MPS = 35.0     # ~126 km/h: faster than any bus, so a GPS jump
+
+
+def prepare_vehicle_pings(vp: DataFrame) -> DataFrame:
+    """One row per GPS fix with the speed since the vehicle's previous fix on the same trip.
+
+    calc_speed_mps = distance / time between consecutive fixes. It is NULL when there's no usable previous
+    fix (first fix of a trip, a gap > 5 min, or an impossible jump), so averages aren't skewed.
+    """
+    w = Window.partitionBy("vehicle_id").orderBy("vehicle_ts")
+    prev_lat, prev_lon = F.lag("latitude").over(w), F.lag("longitude").over(w)
+    dt = F.col("vehicle_ts") - F.lag("vehicle_ts").over(w)
+    same_trip = F.lag("trip_id").over(w) == F.col("trip_id")
+    out = (vp.withColumn("secs_since_prev", dt.cast("int"))
+             .withColumn("_dist", haversine_m(prev_lat, prev_lon, F.col("latitude"), F.col("longitude")))
+             .withColumn("_speed", F.col("_dist") / F.col("secs_since_prev")))
+    usable = same_trip & F.col("secs_since_prev").between(5, 300) & (F.col("_speed") <= MAX_BUS_SPEED_MPS)
+    return (out.withColumn("calc_speed_mps", F.when(usable, F.round("_speed", 2)))
+               .withColumn("reported_speed_mps", F.col("speed_mps").cast("double"))
+               .select(*PING_COLUMNS))
+
+
+GPS_CHECK_COLUMNS = ["service_date", "trip_id", "stop_sequence", "stop_id", "observed_arrival_ts",
+                     "gps_pings_in_window", "gps_min_dist_m", "gps_closest_ts", "gps_offset_s", "gps_confirmed"]
+
+
+def prepare_arrival_gps_check(arrivals: DataFrame, pings: DataFrame, stops: DataFrame,
+                              window_s: int = 1200, confirm_m: float = 150.0) -> DataFrame:
+    """Checks each feed-reported arrival against the bus's own GPS track.
+
+    For every arrival, look at that trip's GPS fixes within +/- window_s of the reported time and find the
+    fix closest to the stop. gps_offset_s = reported arrival - time of that closest fix (positive = the feed
+    says the bus came later than GPS shows). gps_confirmed = the bus really came within confirm_m of the stop.
+    Fixes are ~30 s apart, so the closest fix is within ~15 s of the true pass time.
+    """
+    a = (arrivals.filter("has_schedule")
+         .join(stops.select("stop_id", "stop_lat", "stop_lon"), "stop_id")
+         .select("service_date", "trip_id", "stop_sequence", "stop_id", "observed_arrival_ts",
+                 F.unix_timestamp("observed_arrival_ts").alias("obs_epoch"), "stop_lat", "stop_lon")
+         .alias("a"))
+    p = pings.select(F.col("trip_id").alias("p_trip_id"), F.col("vehicle_ts").alias("ping_epoch"),
+                     F.col("latitude").alias("p_lat"), F.col("longitude").alias("p_lon")).alias("p")
+    cond = ((F.col("a.trip_id") == F.col("p.p_trip_id"))
+            & F.col("p.ping_epoch").between(F.col("a.obs_epoch") - window_s, F.col("a.obs_epoch") + window_s))
+    keys = ["service_date", "trip_id", "stop_sequence", "stop_id", "observed_arrival_ts", "obs_epoch"]
+    agg = (a.join(p, cond, "left")
+           .withColumn("_dist", haversine_m(F.col("stop_lat"), F.col("stop_lon"), F.col("p_lat"), F.col("p_lon")))
+           .groupBy(*keys)
+           .agg(F.count("ping_epoch").alias("gps_pings_in_window"),
+                F.min("_dist").alias("_min_dist"),
+                F.min_by("ping_epoch", "_dist").alias("_closest_epoch")))
+    return (agg.withColumn("gps_min_dist_m", F.round("_min_dist", 1))
+               .withColumn("gps_closest_ts", F.timestamp_seconds("_closest_epoch"))
+               .withColumn("gps_offset_s", (F.col("obs_epoch") - F.col("_closest_epoch")).cast("int"))
+               .withColumn("gps_confirmed", F.coalesce(F.col("_min_dist") <= confirm_m, F.lit(False)))
+               .select(*GPS_CHECK_COLUMNS))
+
+
 # ------------------------------------------------------------------ Delta writers (MERGE = idempotent upserts)
 VP_DDL = """CREATE TABLE IF NOT EXISTS delta.`{path}` (
   event_date date, event_ts timestamp, vehicle_ts bigint, vehicle_id string, vehicle_label string,
@@ -236,3 +308,18 @@ def export_stop_arrivals_window(spark: SparkSession, curated_base: str, jdbc: di
           .filter(F.col("service_date") >= F.to_date(F.lit(cutoff_date))))
     write_load_table(df, "raw._load_rt_stop_arrivals", jdbc)
     return df.count()
+
+
+def export_rt_gps_window(spark: SparkSession, curated_base: str, jdbc: dict, cutoff_date: str) -> dict[str, int]:
+    """GPS pings (with speeds) and the arrival-vs-GPS check for every date >= cutoff, into two load tables."""
+    cutoff = F.to_date(F.lit(cutoff_date))
+    vp = spark.read.format("delta").load(f"{curated_base}/vehicle_positions").filter(F.col("event_date") >= cutoff)
+    arrivals = (spark.read.format("delta").load(f"{curated_base}/stop_arrivals")
+                .filter(F.col("service_date") >= cutoff))
+    stops = spark.read.format("delta").load(f"{curated_base}/gtfs_static/stops")
+
+    pings = prepare_vehicle_pings(vp)
+    write_load_table(pings, "raw._load_rt_vehicle_pings", jdbc)
+    check = prepare_arrival_gps_check(arrivals, vp, stops)
+    write_load_table(check, "raw._load_rt_arrival_gps_check", jdbc)
+    return {"pings": pings.count(), "gps_checks": check.count()}

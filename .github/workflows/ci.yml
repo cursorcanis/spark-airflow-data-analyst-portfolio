@@ -26,18 +26,9 @@ jobs:
         run: cp .env.example .env && docker compose config --quiet
 
   dbt:
-    # Builds and tests the whole dbt project against a throwaway PostGIS database seeded with fixtures.
+    # Builds and tests the whole dbt project against a throwaway PostGIS + H3 database seeded with fixtures.
+    # The database is our own image (docker/postgres), so CI runs the exact extensions production has.
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgis/postgis:17-3.7
-        env:
-          POSTGRES_USER: ci
-          POSTGRES_PASSWORD: ci
-          POSTGRES_DB: warehouse
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U ci" --health-interval 5s --health-timeout 5s --health-retries 20
     env:
       PGHOST: localhost
       PGUSER: ci
@@ -52,6 +43,12 @@ jobs:
       DBT_SEND_ANONYMOUS_USAGE_STATS: "false"
     steps:
       - uses: actions/checkout@v4
+      - name: Start PostGIS + H3 (built from docker/postgres)
+        run: |
+          docker build -t atl-transit/postgres:ci docker/postgres
+          docker run -d --name pg -p 5432:5432 -e POSTGRES_USER=ci -e POSTGRES_PASSWORD=ci -e POSTGRES_DB=warehouse \
+            atl-transit/postgres:ci
+          for i in $(seq 1 60); do docker exec pg pg_isready -U ci -d warehouse -h localhost && break; sleep 2; done
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -64,3 +61,28 @@ jobs:
         run: dbt build --target ci
       - name: Assert known answers in marts
         run: psql -v ON_ERROR_STOP=1 -f ci/assert_marts.sql
+      - name: Generate dbt docs (one self-contained HTML page)
+        run: dbt docs generate --target ci --static
+      - name: Assemble GitHub Pages site (web map + dbt docs)
+        run: |
+          mkdir -p _site/dbt
+          cp -r web/. _site/
+          cp dbt/target/static_index.html _site/dbt/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  pages:
+    # Publishes the site only from main, and only after unit tests and the dbt checks passed.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [test, dbt]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

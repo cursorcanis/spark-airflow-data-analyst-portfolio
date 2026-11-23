@@ -9,6 +9,7 @@ select
     s.wheelchair_boarding = 1 as is_wheelchair_accessible,
     st.tract_geoid,
     st.county_name,
+    h3_lat_lng_to_cell(s.geom, {{ var('h3_resolution') }})::text as h3_cell,
     s.geom
 from {{ ref('stg_gtfs__stops') }} as s
 left join {{ ref('int_stops__with_tract') }} as st using (stop_id)

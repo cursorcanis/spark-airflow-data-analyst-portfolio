@@ -12,7 +12,13 @@ from datetime import timedelta
 import pendulum
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.sdk import dag
-from lake_assets import DBT_MARTS, WAREHOUSE_CENSUS, WAREHOUSE_GTFS_STATIC, WAREHOUSE_RT_ARRIVALS
+from lake_assets import (
+    DBT_MARTS,
+    WAREHOUSE_CENSUS,
+    WAREHOUSE_GTFS_STATIC,
+    WAREHOUSE_RT_ARRIVALS,
+    WAREHOUSE_RT_GPS,
+)
 
 DBT = "/home/airflow/dbt-venv/bin/dbt"
 DBT_ENV = {
@@ -26,7 +32,7 @@ DBT_ENV = {
 
 @dag(
     dag_id="dbt_build",
-    schedule=(WAREHOUSE_GTFS_STATIC | WAREHOUSE_RT_ARRIVALS | WAREHOUSE_CENSUS),
+    schedule=(WAREHOUSE_GTFS_STATIC | WAREHOUSE_RT_ARRIVALS | WAREHOUSE_RT_GPS | WAREHOUSE_CENSUS),
     start_date=pendulum.datetime(2026, 11, 1, tz="UTC"),
     catchup=False,
     max_active_runs=1,

@@ -17,8 +17,11 @@ from pyspark.sql import functions as F  # noqa: E402
 
 from atl_transit.spark_jobs import (  # noqa: E402
     gtfs_time_to_seconds,
+    haversine_m,
+    prepare_arrival_gps_check,
     prepare_static_table,
     prepare_stop_arrivals,
+    prepare_vehicle_pings,
     prepare_vehicle_positions,
 )
 
@@ -107,3 +110,50 @@ def test_scheduled_time_is_correct_on_dst_change_day(spark):
     st = spark.createDataFrame([("T1", 1, "S1", 10 * 3600)], ST_COLS)
     r = prepare_stop_arrivals(tu, st).collect()[0]
     assert r.scheduled_arrival_ts == datetime(2026, 3, 8, 14, 0) and r.delay_s == 0
+
+
+# ------------------------------------------------------------------ Phase 4: GPS-derived tables
+def test_haversine_one_hundredth_degree_of_latitude_is_about_1112_m(spark):
+    df = spark.createDataFrame([(33.75, -84.39, 33.76, -84.39)], ["a", "b", "c", "d"])
+    d = df.select(haversine_m(F.col("a"), F.col("b"), F.col("c"), F.col("d")).alias("m")).collect()[0].m
+    assert 1110 < d < 1113
+
+
+PING_SCHEMA = "event_date date, vehicle_ts long, vehicle_id string, trip_id string, route_id string, " \
+              "direction_id int, latitude double, longitude double, speed_mps float, event_ts timestamp"
+
+
+def test_prepare_vehicle_pings_speed_only_within_a_trip_and_plausible(spark):
+    t0 = ts(2026, 11, 23, 13)
+    rows = [
+        (date(2026, 11, 23), t0, "V1", "T1", "R1", 0, 33.7500, -84.39, None, None),
+        (date(2026, 11, 23), t0 + 30, "V1", "T1", "R1", 0, 33.7509, -84.39, None, None),   # ~100 m in 30 s
+        (date(2026, 11, 23), t0 + 60, "V1", "T2", "R1", 0, 33.7518, -84.39, None, None),   # new trip -> no speed
+        (date(2026, 11, 23), t0 + 90, "V1", "T2", "R1", 0, 33.8000, -84.39, None, None),   # 5 km in 30 s -> jump
+    ]
+    out = {r.vehicle_ts - t0: r for r in prepare_vehicle_pings(spark.createDataFrame(rows, PING_SCHEMA)).collect()}
+    assert out[0].calc_speed_mps is None and out[0].secs_since_prev is None
+    assert 3.2 < out[30].calc_speed_mps < 3.5
+    assert out[60].calc_speed_mps is None
+    assert out[90].calc_speed_mps is None
+
+
+def test_prepare_arrival_gps_check_finds_closest_fix_and_offset(spark):
+    obs = datetime(2026, 11, 23, 13, 5, tzinfo=UTC)
+    arrivals = spark.createDataFrame(
+        [(date(2026, 11, 23), "T1", 1, "S1", obs, True), (date(2026, 11, 23), "T9", 1, "S1", obs, True)],
+        "service_date date, trip_id string, stop_sequence int, stop_id string, observed_arrival_ts timestamp, "
+        "has_schedule boolean")
+    stops = spark.createDataFrame([("S1", 33.7539, -84.3916)], "stop_id string, stop_lat double, stop_lon double")
+    t_obs = int(obs.timestamp())
+    pings = spark.createDataFrame([
+        ("T1", t_obs + 60, 33.7520, -84.3916),     # ~210 m away
+        ("T1", t_obs + 90, 33.7539, -84.3917),     # at the stop: GPS says the bus came 90 s after the feed
+        ("T1", t_obs + 120, 33.7560, -84.3916),
+        ("T1", t_obs + 5000, 33.7539, -84.3916),   # outside the +/- 20 min window: ignored
+    ], "trip_id string, vehicle_ts long, latitude double, longitude double")
+    out = {r.trip_id: r for r in prepare_arrival_gps_check(arrivals, pings, stops).collect()}
+    assert out["T1"].gps_pings_in_window == 3
+    assert out["T1"].gps_offset_s == -90 and out["T1"].gps_confirmed
+    assert out["T1"].gps_min_dist_m < 15
+    assert out["T9"].gps_pings_in_window == 0 and not out["T9"].gps_confirmed and out["T9"].gps_offset_s is None

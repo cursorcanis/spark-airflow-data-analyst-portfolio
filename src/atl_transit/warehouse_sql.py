@@ -14,6 +14,8 @@ INDEXES = {
     "raw.gtfs_trips": ["(trip_id)"],
     "raw.gtfs_stops": ["(stop_id)"],
     "raw.rt_stop_arrivals": ["(service_date)", "(trip_id, stop_sequence)"],
+    "raw.rt_vehicle_pings": ["(event_date)"],
+    "raw.rt_arrival_gps_check": ["(service_date)"],
 }
 
 

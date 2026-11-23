@@ -77,3 +77,43 @@ models:
     columns:
       - name: geoid
         data_tests: [unique, not_null]
+
+  - name: fct_vehicle_ping
+    description: One row per bus GPS fix, with speed since the previous fix and its H3 hexagon.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [vehicle_id, event_at]
+    columns:
+      - name: h3_cell
+        data_tests: [not_null]
+      - name: calc_speed_kmh
+        data_tests:
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 130}
+
+  - name: mart_h3_bus_speed
+    description: >
+      Per H3 hexagon - median moving bus speed (all day and weekday peak), share of GPS samples stopped,
+      and on-time share of arrivals at the stops inside it. Ready to map (geom = hexagon polygon).
+    columns:
+      - name: h3_cell
+        data_tests: [unique, not_null]
+
+  - name: mart_segment_delay
+    description: >
+      Per directed stop-to-stop segment - how much delay buses add between the two stops
+      (positive = falls further behind schedule). geom = straight line between the stops.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [from_stop_id, to_stop_id]
+
+  - name: mart_gps_validation
+    description: >
+      Confusion matrix of the feed's on-time class vs the class from the bus's GPS pass time.
+      Validates the assumption that a "passed" stop in GTFS-realtime equals the real arrival.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [feed_class, gps_class]

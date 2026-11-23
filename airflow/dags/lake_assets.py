@@ -18,6 +18,8 @@ WAREHOUSE_GTFS_STATIC = Asset(name="warehouse_raw_gtfs_static",
                               uri="postgres://postgres:5432/warehouse/raw/gtfs_stop_times")
 WAREHOUSE_RT_ARRIVALS = Asset(name="warehouse_raw_rt_stop_arrivals",
                               uri="postgres://postgres:5432/warehouse/raw/rt_stop_arrivals")
+WAREHOUSE_RT_GPS = Asset(name="warehouse_raw_rt_gps",
+                         uri="postgres://postgres:5432/warehouse/raw/rt_vehicle_pings")
 WAREHOUSE_CENSUS = Asset(name="warehouse_raw_census",
                          uri="postgres://postgres:5432/warehouse/raw/acs_tract_demographics")
 DBT_MARTS = Asset(name="dbt_marts", uri="postgres://postgres:5432/warehouse/marts/fct_stop_arrival")

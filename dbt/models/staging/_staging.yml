@@ -27,3 +27,12 @@ models:
     columns:
       - name: geoid
         data_tests: [unique, not_null]
+  - name: stg_rt__vehicle_pings
+    columns:
+      - name: h3_cell
+        data_tests: [not_null]
+  - name: stg_rt__arrival_gps_check
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [service_date, trip_id, stop_sequence]

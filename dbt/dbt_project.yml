@@ -18,9 +18,14 @@ models:
     marts:
       +schema: marts
       +materialized: table       # what BI tools query
+      +grants:
+        select: ["reporting"]    # read-only BI login; dbt re-applies grants every time it rebuilds a table
 
 vars:
   on_time_early_s: -60           # more than 1 min early = early
   on_time_late_s: 300            # more than 5 min late = late (common transit on-time window)
   fct_lookback_days: 3           # incremental rebuild window; matches the warehouse load lookback
   max_abs_delay_s: 10800         # |delay| > 3 h is treated as a data error, not a real delay
+  h3_resolution: 8              # H3 hexagons of ~0.74 km2 (edge ~460 m): about a few city blocks
+  moving_speed_min_kmh: 2        # GPS speed samples below this = stopped (dwell at stops, layovers, signals)
+  peak_hours_local: [7, 8, 16, 17, 18]   # weekday peak hours (scheduled/event hour in Atlanta time)

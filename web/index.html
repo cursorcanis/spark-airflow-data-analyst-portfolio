@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Atlanta Bus Reliability</title>
+  <meta name="description" content="Where MARTA buses slow down, lose time and run late: built from live GTFS-realtime data with Spark, Airflow, dbt and PostGIS/H3.">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="map" aria-label="Map of the Atlanta region"></main>
+
+  <aside id="panel">
+    <header>
+      <h1>Atlanta Bus Reliability</h1>
+      <p class="sub">MARTA buses, observed from live GTFS-realtime feeds.
+        <span id="daterange"></span></p>
+    </header>
+
+    <section class="stats" aria-label="Headline numbers">
+      <div class="stat"><span class="v" id="s-ontime">–</span><span class="l">arrivals on time<br>(feed, −1/+5 min)</span></div>
+      <div class="stat"><span class="v" id="s-gps">–</span><span class="l">on time when checked<br>against bus GPS</span></div>
+      <div class="stat"><span class="v" id="s-arrivals">–</span><span class="l">observed arrivals</span></div>
+    </section>
+
+    <fieldset class="layers">
+      <legend>Map layer</legend>
+      <label><input type="radio" name="layer" value="speed" checked> Bus speed (H3 hexagons)</label>
+      <label><input type="radio" name="layer" value="segments"> Where buses lose time</label>
+      <label><input type="radio" name="layer" value="tracts"> Neighborhoods (Census tracts)</label>
+      <div id="tract-metric" hidden>
+        <span>Color by</span>
+        <label><input type="radio" name="tmetric" value="pct_on_time" checked> on time</label>
+        <label><input type="radio" name="tmetric" value="pct_no_car"> car-free households</label>
+      </div>
+    </fieldset>
+
+    <section id="legend" aria-live="polite"></section>
+    <p id="finding" class="finding"></p>
+
+    <section>
+      <h2>Least reliable routes</h2>
+      <table id="worst"><thead><tr><th>Route</th><th class="n">On time</th><th class="n">Arrivals</th></tr></thead><tbody></tbody></table>
+    </section>
+
+    <footer>
+      <p>Pipeline: Airflow ingests the feeds → Spark cleans them into Delta Lake → dbt models them in PostGIS
+        with H3 → snapshot exported here. Rail and streetcar aren't in MARTA's realtime feed.</p>
+      <p><a href="https://github.com/cursorcanis/spark-airflow-data-analyst-portfolio">Source code</a> ·
+        <a href="dbt/">dbt docs &amp; lineage</a></p>
+      <p class="muted" id="exported"></p>
+    </footer>
+  </aside>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

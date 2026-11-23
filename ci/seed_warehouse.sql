@@ -1,6 +1,9 @@
 -- Minimal raw-schema fixture for running `dbt build` in CI (same column names/types the Spark JDBC
 -- loads and the Census DAG create in production). Tiny but covers every join and test path.
 CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS h3;
+CREATE EXTENSION IF NOT EXISTS h3_postgis CASCADE;
+CREATE ROLE reporting LOGIN;            -- dbt `grants` on marts need the role to exist
 CREATE SCHEMA IF NOT EXISTS raw;
 CREATE SCHEMA IF NOT EXISTS staging;
 CREATE SCHEMA IF NOT EXISTS marts;
@@ -63,3 +66,21 @@ INSERT INTO raw.acs_tract_demographics (geoid, acs_year, total_population, media
     workers_public_transit, occupied_households, owner_households_no_vehicle, renter_households_no_vehicle,
     poverty_universe, below_poverty) VALUES
     ('13121011901', 2024, 2184, 77838, 1200, 300, 1000, 20, 394, 2100, 400);
+
+-- GPS fixes for trip T1 around stop S1 (Five Points). Speeds are what Spark computes; 3.33 m/s = 12 km/h.
+CREATE TABLE raw.rt_vehicle_pings (event_date date, event_ts timestamp, vehicle_ts bigint, vehicle_id text,
+    trip_id text, route_id text, direction_id int, latitude double precision, longitude double precision,
+    reported_speed_mps double precision, calc_speed_mps double precision, secs_since_prev int);
+INSERT INTO raw.rt_vehicle_pings VALUES
+    ('2026-11-23', '2026-11-23 13:01:30', 1795438890, 'V1', 'T1', 'R1', 0, 33.7539, -84.3916, NULL, NULL, NULL),
+    ('2026-11-23', '2026-11-23 13:02:00', 1795438920, 'V1', 'T1', 'R1', 0, 33.7541, -84.3916, NULL, 3.33, 30),
+    ('2026-11-23', '2026-11-23 13:02:30', 1795438950, 'V1', 'T1', 'R1', 0, 33.7541, -84.3916, NULL, 0.0, 30);
+
+-- GPS check per arrival. gps_offset_s = feed arrival - GPS pass. T2's "early" (-180 s) is really -30 s by GPS.
+CREATE TABLE raw.rt_arrival_gps_check (service_date date, trip_id text, stop_sequence int, stop_id text,
+    observed_arrival_ts timestamp, gps_pings_in_window bigint, gps_min_dist_m double precision,
+    gps_closest_ts timestamp, gps_offset_s int, gps_confirmed boolean);
+INSERT INTO raw.rt_arrival_gps_check VALUES
+    ('2026-11-23', 'T1', 1, 'S1', '2026-11-23 13:02:00', 3, 5.0, '2026-11-23 13:01:30', 30, true),     -- on time either way
+    ('2026-11-23', 'T1', 2, 'S2', '2026-11-23 13:20:00', 0, NULL, NULL, NULL, false),                  -- no GPS
+    ('2026-11-23', 'T2', 1, 'S1', '2026-11-23 13:57:00', 40, 20.0, '2026-11-23 13:59:30', -150, true); -- early -> on time

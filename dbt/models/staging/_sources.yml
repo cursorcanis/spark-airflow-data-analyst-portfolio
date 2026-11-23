@@ -18,5 +18,13 @@ sources:
         freshness:                 # MARTA has almost no service ~1-5 AM, hence the generous error threshold
           warn_after: {count: 3, period: hour}
           error_after: {count: 12, period: hour}
+      - name: rt_vehicle_pings
+        description: Bus GPS fixes with the speed since the previous fix (Spark; loaded daily).
+        loaded_at_field: "event_ts at time zone 'UTC'"
+        freshness:                 # loaded once a day at 04:30 Atlanta time
+          warn_after: {count: 30, period: hour}
+          error_after: {count: 54, period: hour}
+      - name: rt_arrival_gps_check
+        description: Each feed-reported arrival checked against the bus's own GPS track (Spark; loaded daily).
       - name: census_tracts
       - name: acs_tract_demographics
