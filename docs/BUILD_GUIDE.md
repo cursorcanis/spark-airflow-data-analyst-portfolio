@@ -438,3 +438,154 @@ docker compose exec airflow-scheduler airflow dags trigger census_tracts_referen
 ## Updated 60-second pitch
 
 > "...On top of that, a dedicated poller captures MARTA's GTFS-realtime protobuf feeds every 30 seconds, deduplicated by feed timestamp, into the raw zone. Airflow compacts each hour into Parquet using a data-interval timetable, a late-arrival sensor and dynamic task mapping per feed, with a completeness check and a manifest per hour. Retention deletes raw snapshots only after they've been compacted. Census tract boundaries are loaded transactionally into PostGIS for spatial joins. I chose a separate poller because Airflow is a batch orchestrator, not a 30-second scheduler."
+
+---
+
+# Phase 2: Spark curation into Delta Lake (and Census demographics)
+
+```
+raw zone (Parquet, per hour) ──► Spark (via Spark Connect) ──► curated zone (Delta Lake tables)
+   gtfs_static/.../tables/*.txt ─────────────────────────────►  curated/gtfs_static/<table>
+   gtfs_rt_parquet/feed=vehicle_positions/... ───────────────►  curated/vehicle_positions
+   gtfs_rt_parquet/feed=trip_updates/...  + stop_times ──────►  curated/stop_arrivals  (observed vs scheduled)
+Census API (ACS 5-year) ──► raw/census_acs5/... ──► Postgres raw.acs_tract_demographics
+```
+
+## Step 22: Choose how Airflow talks to Spark (Spark Connect)
+
+Options considered:
+| Option | Problem here |
+|---|---|
+| `SparkSubmitOperator` from the Airflow container | Needs Java + Spark in the Airflow image (big), and the **driver's Python version must match the executors'** (Airflow uses 3.12, the Spark image 3.10) |
+| `DockerOperator` (start a Spark container per job) | Mounting the Docker socket into Airflow is effectively root on the host |
+| **Spark Connect** (chosen) | Spark 4's client/server API. A long-running **Spark Connect server** is the driver. Clients send DataFrame plans over gRPC (port 15002) using the thin `pyspark-client` package: no JVM, no Python-version coupling |
+
+How it fits together:
+```
+Airflow task (pyspark-client) ──gRPC plan──► spark-connect (driver, 1 GB) ──► spark-master ──► spark-worker executor (4 cores, 1.5 GB)
+                                                     │                                              │
+                                                     └──────────── s3a:// read/write ───────────────┴──► RustFS lake
+```
+In code: `SparkSession.builder.remote("sc://spark-connect:15002").getOrCreate()` (see `src/atl_transit/spark_session.py`).
+
+## Step 23: Build a Spark image with Delta Lake and S3 support
+
+`docker/spark/Dockerfile` extends `apache/spark:4.2.1-python3` and downloads jars into `/opt/spark/jars` **at build time**:
+
+| Jar | Why | Version rule |
+|---|---|---|
+| `hadoop-aws` | The `s3a://` filesystem | Must equal Spark's bundled Hadoop (`hadoop-client-api-3.5.0.jar` → 3.5.0) |
+| `software.amazon.awssdk:bundle` | AWS SDK v2 used by S3A | The version Hadoop was built with (`aws-java-sdk-v2.version` in the hadoop-project POM → 2.35.4) |
+| `analyticsaccelerator-s3` | Required by Hadoop 3.5's S3A input stream | From the same POM (1.3.1). Without it reads fail with `NoClassDefFoundError: .../analyticsaccelerator/...` |
+| `delta-spark_2.13`, `delta-storage` | Delta Lake | Delta 4.4.1 supports Spark 4.2 |
+
+**How to find compatible versions yourself:** look at which Hadoop jars the Spark image ships (`ls /opt/spark/jars | grep hadoop`), then read that Hadoop version's `hadoop-project` POM on Maven Central for its dependency versions.
+
+## Step 24: Configure Spark Connect for the lake and Delta (`docker-compose.yml` → `spark-connect`)
+
+| Setting | Purpose |
+|---|---|
+| `--master spark://spark-master:7077` | Use the standalone cluster |
+| `spark.driver.host=spark-connect` | Executors must reach the driver by its service name |
+| `spark.executor.memory=1536m`, `cores=4` | Fits inside the worker's 2 GB / 4 cores |
+| `spark.sql.shuffle.partitions=8` | Default is 200, far too many tiny tasks for hourly data. **A tuning point worth mentioning** |
+| `spark.sql.session.timeZone=UTC` | Timestamps are stored and computed in UTC; local time only where explicitly needed |
+| `spark.sql.extensions` / `spark_catalog` = Delta classes | Enables Delta SQL (`MERGE INTO`, `DESCRIBE HISTORY`, `delta.\`path\``) |
+| `fs.s3a.endpoint=http://lake:9000`, `path.style.access=true`, `ssl.enabled=false` | Point S3A at RustFS instead of AWS |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` env vars | S3A's default credential chain reads them, so secrets stay out of process arguments |
+
+The same env vars go on the **worker** too, because executors read and write the lake directly.
+
+**Verify:** `docker compose logs spark-connect | grep "server started"`, and the Spark master UI (:8081) shows the "Spark Connect server" application with one executor.
+
+## Step 25: Profile the data before writing transformations
+
+Before writing jobs, test the join keys you're about to rely on:
+- All 918 realtime `trip_id`s exist in the static `trips.txt`. ✔
+- Realtime `stop_id`s are **internal codes**: only 1,842 of 6,565 exist in `stops.txt`. ✘
+- `(trip_id, stop_sequence)` matches `stop_times.txt` **100%**. ✔ → this is the join key, and the official `stop_id` comes from the schedule.
+- GTFS times go past 24:00 (`26:11:00` = 2:11 AM the next calendar day, same service day).
+
+Interview point: *"I found the realtime stop IDs didn't match the schedule, so I profiled the join keys and switched to trip plus stop sequence, which matched 100%."*
+
+## Step 26: Write the transformations (`src/atl_transit/spark_jobs.py`)
+
+Two layers:
+1. **Pure transformations** (`prepare_*`: DataFrame in, DataFrame out). They're unit-tested with a local SparkSession and need no lake.
+2. **I/O** (`curate_*`, `merge_*`): read the lake, MERGE into Delta.
+
+| Curated table | Logic |
+|---|---|
+| `gtfs_static/<table>` | Typed columns from a spec (missing optional columns become typed NULLs, so the schema is stable). Dates parsed. `arrival_secs` = seconds from the GTFS "HH:MM:SS" (handles ≥24 h). Full overwrite; Delta keeps old versions |
+| `vehicle_positions` | Reject rows with no vehicle id, timestamp or position, or outside the Atlanta bounding box. Deduplicate per `(vehicle_id, vehicle_ts)` (the same GPS fix repeats in each 30 s snapshot) with a `row_number()` window. `event_date` in Atlanta local time. Partitioned by `event_date` |
+| `stop_arrivals` | From trip updates, keep rows where `arrival_time <= feed_ts` (the stop has already been served). The latest such report per `(start_date, trip_id, stop_sequence)` is the **observed arrival**. Join to `stop_times` → **scheduled arrival** using the GTFS rule *"noon minus 12 hours, local time"* (correct on DST change days) → `delay_s`. Partitioned by `service_date` |
+
+**Assumption to validate later (Phase 4):** MARTA's reports for passed stops reflect actual arrival times. Cross-check against vehicle GPS positions.
+
+## Step 27: Make writes idempotent with Delta MERGE
+
+```sql
+MERGE INTO delta.`s3a://curated/stop_arrivals` t
+USING arrivals_src s
+ON  t.service_date IN (DATE'2026-11-23')          -- partition pruning: only touch today's files
+AND t.service_date = s.service_date AND t.trip_id = s.trip_id AND t.stop_sequence = s.stop_sequence
+WHEN MATCHED AND s.feed_ts > t.feed_ts THEN UPDATE SET *   -- newer report wins
+WHEN NOT MATCHED THEN INSERT *
+```
+- **Upsert:** a stop passed at 10:59 shows up in both the 10:00 and 11:00 hours. The second run *updates* instead of duplicating. In the first backfill, ~650-730 rows per hour were updates.
+- **Order-independent:** because of `s.feed_ts > t.feed_ts`, processing hours in any order (retries, backfills) gives the same final table.
+- **ACID + snapshot isolation:** readers never see a half-written MERGE, and a reader of `stop_times` during an overwrite sees the old or the new version, never a mix.
+- `DESCRIBE HISTORY delta.\`...\`` shows every MERGE with its inserted/updated row counts (audit trail, time travel).
+
+## Step 28: Orchestrate with Airflow Assets (data-aware scheduling)
+
+`airflow/dags/lake_assets.py` defines Assets (URIs that name datasets). A producer task declares `outlets=[ASSET]`, and a consumer DAG uses `schedule=[ASSET]`:
+
+```
+gtfs_static_weekly.upload ──(RAW_GTFS_STATIC)──► spark_curate_gtfs_static ──(CURATED_GTFS_STATIC)
+gtfs_rt_hourly.check_and_record ──(RAW_RT_PARQUET)──► spark_curate_rt ──(CURATED_VEHICLE_POSITIONS, CURATED_STOP_ARRIVALS)
+```
+- Events fire only on **success**. An unchanged static feed (upload skipped) or an hour with no data (check fails) triggers nothing downstream.
+- `spark_curate_rt` is **incremental with a checkpoint**: it processes every hour that has a manifest with data but isn't yet in `s3://curated/_state/rt_curated_hours.json`, oldest first, max 24 per run, and checkpoints after each hour. Missed triggers, manual runs and backfills all converge to the same state.
+- `max_active_runs=1`: concurrent MERGEs into the same Delta table would conflict.
+
+**Run it:**
+```bash
+docker compose exec airflow-scheduler airflow dags unpause spark_curate_gtfs_static
+docker compose exec airflow-scheduler airflow dags unpause spark_curate_rt
+docker compose exec airflow-scheduler airflow dags trigger spark_curate_gtfs_static   # first time only
+docker compose exec airflow-scheduler airflow dags trigger spark_curate_rt            # backfills all captured hours
+```
+
+## Step 29: Test PySpark code
+
+`tests/spark/test_spark_jobs.py` uses `SparkSession.builder.master("local[2]")`:
+- GTFS time parsing past midnight; typed static tables with missing columns.
+- Vehicle dedup keeps the earliest sighting; out-of-area and id-less rows are rejected; local event date.
+- Stop arrivals: latest passed report wins, future stops are excluded, the schedule join gives the delay, unscheduled trips are flagged.
+- **DST day:** 10:00 local on 2026-03-08 = 14:00 UTC.
+
+Tips: give `createDataFrame` an explicit schema when a column is all NULL (types can't be inferred). Tests skip automatically without Java. CI installs Java 21 (`actions/setup-java`).
+
+## Step 30: Census ACS demographics (`census_tracts_reference`, second branch)
+
+- Needs a free key (api.census.gov), stored **only** in the server `.env` as `CENSUS_API_KEY` and passed to Airflow through an env var. If it isn't set, the task **skips**.
+- One request for all 11 counties: `get=NAME,<variables>&for=tract:*&in=state:13&in=county:057,063,...`
+- Variables: total population, median household income, workers / transit commuters, households / zero-vehicle households (owner + renter), poverty.
+- ACS uses negative sentinels (`-666666666` = not available), which become NULL.
+- **Secret hygiene:** HTTP library errors include the full URL, which contains the key. The code re-raises a clean error `from None`, and there's a unit test proving the key isn't in the message.
+- Same transactional full-refresh pattern → `raw.acs_tract_demographics`. Verified: 1,248 tracts, every one joins to a boundary, region population 5.06 M.
+
+## Phase 2 results (first backfill, 10 captured hours)
+
+| Metric | Value |
+|---|---|
+| Curated vehicle positions | 92,373 (225 vehicles) |
+| Observed stop arrivals | 37,979 (0 duplicate keys) |
+| On time (−1 to +5 min) | 69.1% |
+| Late > 5 min / early > 1 min | 11.3% / 19.7% |
+| Median delay | 0.7 min |
+
+## Updated 60-second pitch (add)
+
+> "...Spark 4 runs through Spark Connect, so Airflow sends DataFrame plans over gRPC without carrying a JVM. PySpark jobs dedupe GPS fixes and derive observed-vs-scheduled arrivals, joined on trip and stop sequence after profiling showed the realtime stop IDs didn't match the schedule. Results land in Delta Lake through partition-pruned, order-independent MERGEs, so backfills and retries are idempotent. The DAGs are chained with Airflow Assets, and the realtime curation is incremental with a checkpoint. First result: 69% of observed arrivals were on time."
