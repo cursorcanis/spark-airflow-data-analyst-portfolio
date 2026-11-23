@@ -91,9 +91,9 @@ A full step-by-step explanation of how every component is wired together is in [
 
 - [x] **Phase 0: Foundation.** Docker platform, CI, first ingest DAG (GTFS static)
 - [x] **Phase 1: Ingest.** GTFS-realtime vehicle positions every few minutes, plus reference data (Census tracts)
-- [x] **Phase 2: Spark.** PySpark curation jobs (dedupe, schema enforcement, H3 indexing) to Delta/Parquet
+- [x] **Phase 2: Spark.** PySpark curation via Spark Connect into Delta Lake (dedupe, typed schemas, observed vs scheduled arrivals, idempotent MERGE), plus Census ACS demographics
 - [ ] **Phase 3: Warehouse.** dbt star schema in Postgres/PostGIS with tests, run in CI
-- [ ] **Phase 4: Geospatial + BI.** Origin-destination matrix, on-time performance by corridor, Power BI report, web map
+- [ ] **Phase 4: Geospatial + BI.** H3 indexing, origin-destination matrix, on-time performance by corridor, Power BI report, web map
 - [ ] **Phase 5: Hardening.** Data-quality suite, Terraform, scheduled operations
 - [ ] **Stretch:** streaming ingest (Redpanda/Kafka), natural-language Q&A over the marts (local LLM), Snowflake run of the dbt project
 
