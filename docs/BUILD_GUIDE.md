@@ -589,3 +589,102 @@ Tips: give `createDataFrame` an explicit schema when a column is all NULL (types
 ## Updated 60-second pitch (add)
 
 > "...Spark 4 runs through Spark Connect, so Airflow sends DataFrame plans over gRPC without carrying a JVM. PySpark jobs dedupe GPS fixes and derive observed-vs-scheduled arrivals, joined on trip and stop sequence after profiling showed the realtime stop IDs didn't match the schedule. Results land in Delta Lake through partition-pruned, order-independent MERGEs, so backfills and retries are idempotent. The DAGs are chained with Airflow Assets, and the realtime curation is incremental with a checkpoint. First result: 69% of observed arrivals were on time."
+
+---
+
+# Phase 3: the warehouse (Postgres/PostGIS) and dbt
+
+```
+curated Delta ──Spark JDBC──► raw._load_* ──Airflow, 1 transaction──► raw.gtfs_*, raw.rt_stop_arrivals
+Census DAG ──────────────────────────────────────────────────────────► raw.census_tracts, raw.acs_tract_demographics
+                                                                            │  dbt build (runs + tests)
+                                                                            ▼
+                                     staging (views) ──► intermediate (spatial join) ──► marts (star schema + KPIs)
+```
+
+## Step 31: Load the lake into the warehouse (Spark JDBC + atomic publish)
+
+1. **Add the Postgres JDBC driver** to the Spark image (`postgresql-42.7.15.jar`). The *executors* open the database connections, so the driver must be on the cluster, not on the client.
+2. **Spark writes a load table** (`raw._load_<name>`, mode overwrite = drop and recreate) with `batchsize=10000` and `numPartitions=4` (at most 4 parallel connections).
+3. **Airflow publishes it in one transaction** (`src/atl_transit/warehouse_sql.py`):
+   - GTFS static (**full refresh**): `TRUNCATE target; INSERT INTO target SELECT * FROM load; CREATE INDEX IF NOT EXISTS ...; DROP load; ANALYZE`
+   - Realtime arrivals (**lookback window**, 3 days): `DELETE FROM target WHERE service_date >= cutoff; INSERT ... FROM load`. Recent days can still change (late MERGE updates), older days can't.
+4. Why `TRUNCATE`, not `DROP`: dbt views are built on these tables, and Postgres won't drop a table that views depend on. Why a load table: Spark's JDBC write isn't one transaction (each partition commits separately). Staging it and publishing in SQL makes the switch atomic for readers.
+5. Vehicle positions stay in the lake (hundreds of thousands of rows a day; analysed with Spark). Not everything belongs in the warehouse.
+
+DAGs: `warehouse_load_gtfs_static` (triggered by the curated static asset) and `warehouse_load_rt` (triggered by curated stop arrivals). Each emits a warehouse asset when it finishes.
+
+## Step 32: Install dbt without breaking Airflow
+
+dbt-core pins its own versions of shared libraries (jinja, click, protobuf...). Installing it into Airflow's environment risks conflicts, so the Airflow image gets a **separate virtualenv**:
+```dockerfile
+RUN python -m venv /home/airflow/dbt-venv \
+ && /home/airflow/dbt-venv/bin/pip install "dbt-core==1.12.7" "dbt-postgres==1.11.0"
+```
+Airflow calls `/home/airflow/dbt-venv/bin/dbt` from a `BashOperator`. The project folder is mounted read-only at `/opt/airflow/dbt`, so build artifacts go to `/tmp` via `DBT_TARGET_PATH` / `DBT_LOG_PATH`.
+
+## Step 33: The dbt project (`dbt/`)
+
+| File | Role |
+|---|---|
+| `dbt_project.yml` | Project config: folder → schema + materialization; **vars** for business rules (on-time window −60 s … +300 s, lookback 3 days, max plausible delay 3 h) |
+| `profiles.yml` | Connection, **all from env vars** (`DBT_PG_HOST/USER/PASSWORD/DBNAME`). Targets `prod` (Airflow) and `ci` (GitHub Actions) |
+| `macros/generate_schema_name.sql` | Use `staging` / `marts` as-is (dbt's default would create `staging_marts`) |
+| `models/staging/_sources.yml` | Declares the raw tables, with **source freshness** on `rt_stop_arrivals` (warn after 3 h, error after 12 h) |
+
+**Layers:**
+| Layer | Materialization | Models |
+|---|---|---|
+| staging | view | `stg_gtfs__routes/stops/trips/stop_times`, `stg_rt__stop_arrivals`, `stg_census__tracts/acs`. Rename, type, build PostGIS points (`ST_MakePoint(lon, lat)`), convert timestamps to `timestamptz`, derive ACS percentages |
+| intermediate | table | `int_stops__with_tract`: **point-in-polygon** with `ST_Intersects` + `DISTINCT ON` (one tract per stop) |
+| marts | table | `dim_route`, `dim_stop` (+ tract), `dim_tract` (+ ACS, GiST index), `dim_date` (`generate_series`), **`fct_stop_arrival`** (incremental), `mart_route_on_time_daily`, `mart_on_time_by_hour`, `mart_tract_service_equity` |
+
+**The fact table:** grain = one observed arrival per (service_date, trip, stop_sequence). It's `incremental` with `incremental_strategy='delete+insert'` and `unique_key` = the grain: each run rebuilds only the last 3 service dates. Columns include `delay_s`, `is_on_time / is_late / is_early` (from the vars) and the scheduled hour in Atlanta local time.
+
+**Tests (32):** built-in `unique`, `not_null`, `accepted_values` and `relationships` (fact → each dimension), plus two **custom generic tests** written as macros (`unique_combination` for composite keys, `accepted_range`), plus a **singular test** (`tests/assert_observed_stops_mostly_mapped_to_tracts.sql`, warn level). `dbt build` runs each model, then its tests, in dependency order, and a failing test skips everything downstream.
+
+## Step 34: Orchestrate dbt with Assets
+
+`dbt_build` runs on `WAREHOUSE_GTFS_STATIC | WAREHOUSE_RT_ARRIVALS | WAREHOUSE_CENSUS` (the `|` makes an **AssetAny**: any one update triggers it). Tasks: `dbt build --target prod` → `dbt source freshness` (`trigger_rule="all_done"`, so freshness is reported even if a model failed).
+
+*First-run race observed:* on an empty warehouse, the realtime load finished first and triggered dbt before the GTFS tables existed, so the first attempt failed with "relation does not exist" and the automatic retry succeeded. It can only happen on the very first load.
+
+## Step 35: Test dbt in CI against a real database
+
+`.github/workflows/ci.yml` → job `dbt`:
+1. A **PostGIS service container** (`postgis/postgis:17-3.7`) with a health check.
+2. `psql -f ci/seed_warehouse.sql`: tiny fixtures with the same columns as production (2 routes, 2 stops (one inside a tract polygon, one outside), 3 scheduled arrivals that are on time / late / early, 1 unscheduled, 1 tract with ACS).
+3. `dbt build --target ci` **twice** (the second run exercises the incremental path).
+4. `psql -f ci/assert_marts.sql`: **known-answer checks** (3 fact rows, the 1/1/1 classification, the spatial join result, 41.4% car-free, 13:00 UTC = 08 local). Each check divides by zero on failure, so `ON_ERROR_STOP` fails the job.
+
+**Replay CI locally** (same steps, throwaway containers):
+```bash
+docker network create dbtci
+docker run -d --name dbtci-pg --network dbtci -e POSTGRES_USER=ci -e POSTGRES_PASSWORD=ci -e POSTGRES_DB=warehouse postgis/postgis:17-3.7
+docker exec -i dbtci-pg psql -U ci -d warehouse < ci/seed_warehouse.sql
+docker run --rm --network dbtci -v $PWD/dbt:/dbt:ro -e DBT_PG_HOST=dbtci-pg -e DBT_PG_USER=ci -e DBT_PG_PASSWORD=ci \
+  -e DBT_PG_DBNAME=warehouse -e DBT_PROFILES_DIR=/dbt -e DBT_PROJECT_DIR=/dbt -e DBT_TARGET_PATH=/tmp/t -e DBT_LOG_PATH=/tmp/l \
+  --entrypoint /home/airflow/dbt-venv/bin/dbt atl-transit/airflow:3.4.0-3 build --target ci
+docker rm -f dbtci-pg && docker network rm dbtci
+```
+
+## Step 36: Deploy without overloading the server
+
+New images for Spark and Airflow at once. Roll them out **in stages** (Spark services → `airflow-init` → the rest) and watch `free -h` between steps, instead of recreating every container at the same moment.
+
+## Phase 3 results (first full build)
+
+| | |
+|---|---|
+| dbt build | **48 / 48 pass** (models + tests), source freshness PASS |
+| Fact rows | 42,653 observed arrivals (2026-11-22 → 23) |
+| Stops mapped to tracts | 7,055 / 7,055 |
+| Bus on-time (−1 / +5 min) | **70.4%** |
+| Least reliable routes (≥300 arrivals) | 20 (27.1%), 11 (46.0%), 165 (47.8%) |
+| Tracts with ≥20% car-free households | 73.4% on time vs 69.8% for <10% (preliminary: ~1 day of data) |
+
+**Data limitation found:** MARTA's GTFS-realtime feed covers **buses only** (71 of 81 bus routes). The 4 rail lines and the Atlanta Streetcar don't appear in either realtime feed, so every on-time figure is a bus figure.
+
+## Updated 60-second pitch (add)
+
+> "...Spark loads curated tables into Postgres over JDBC into staging tables, and Airflow publishes them in a single transaction. dbt then builds a tested star schema: staging views, a PostGIS point-in-polygon join that puts every stop in its Census tract, an incremental fact table of observed arrivals, and marts for on-time performance by route, hour and neighborhood demographics. 32 data tests plus source freshness run on every build, and CI runs the whole dbt project twice against a real PostGIS container with known-answer assertions."

@@ -4,7 +4,7 @@ An end-to-end data platform for **Atlanta transit data (MARTA)**: it ingests pub
 
 The whole stack runs **locally for $0** with Docker on a single home server. The code is cloud-portable: the lake speaks the S3 API, the Spark jobs run unchanged on Databricks/EMR, and the dbt project targets Snowflake as well as Postgres.
 
-> Status: **Phase 2 complete.** Realtime capture, hourly compaction, Spark/Delta curation and Census reference data are running 24/7. See the [roadmap](#roadmap).
+> Status: **Phase 3 complete.** Realtime capture, Spark/Delta curation, a dbt-modeled PostGIS warehouse and Census demographics are running 24/7. First result: 70.4% of observed MARTA bus arrivals on time (−1/+5 min). Note: MARTA's realtime feed covers buses only. See the [roadmap](#roadmap).
 
 ## Architecture
 
@@ -92,7 +92,7 @@ A full step-by-step explanation of how every component is wired together is in [
 - [x] **Phase 0: Foundation.** Docker platform, CI, first ingest DAG (GTFS static)
 - [x] **Phase 1: Ingest.** GTFS-realtime vehicle positions every few minutes, plus reference data (Census tracts)
 - [x] **Phase 2: Spark.** PySpark curation via Spark Connect into Delta Lake (dedupe, typed schemas, observed vs scheduled arrivals, idempotent MERGE), plus Census ACS demographics
-- [ ] **Phase 3: Warehouse.** dbt star schema in Postgres/PostGIS with tests, run in CI
+- [x] **Phase 3: Warehouse.** Spark JDBC load with atomic publish; dbt star schema in Postgres/PostGIS (spatial stop-to-tract join, incremental fact, on-time and equity marts), 32 tests + freshness, dbt CI against PostGIS
 - [ ] **Phase 4: Geospatial + BI.** H3 indexing, origin-destination matrix, on-time performance by corridor, Power BI report, web map
 - [ ] **Phase 5: Hardening.** Data-quality suite, Terraform, scheduled operations
 - [ ] **Stretch:** streaming ingest (Redpanda/Kafka), natural-language Q&A over the marts (local LLM), Snowflake run of the dbt project
