@@ -34,6 +34,7 @@ x-airflow-common: &airflow-common
     POLL_TRIP_UPDATES_S: ${POLL_TRIP_UPDATES_S:-120}
     RAW_RT_RETENTION_DAYS: ${RAW_RT_RETENTION_DAYS:-14}
     SPARK_CONNECT_URL: sc://spark-connect:15002
+    CENSUS_API_KEY: ${CENSUS_API_KEY:-}   # optional; ACS demographics are skipped without it
   volumes:
     - ./airflow/dags:/opt/airflow/dags:ro
     - ./src:/opt/airflow/src:ro

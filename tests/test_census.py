@@ -1,6 +1,17 @@
 import json
 
-from atl_transit.census import ARC_COUNTIES, feature_to_row, fetch_tracts, where_clause
+import requests
+
+from atl_transit.census import (
+    ACS_VARIABLES,
+    ARC_COUNTIES,
+    CensusApiError,
+    acs_rows,
+    feature_to_row,
+    fetch_acs_tracts,
+    fetch_tracts,
+    where_clause,
+)
 
 FEATURE = {
     "type": "Feature",
@@ -54,3 +65,27 @@ def test_fetch_tracts_pages_until_short_page():
     got = list(fetch_tracts(session, page_size=2))
     assert [f["properties"]["GEOID"] for f in got] == ["0", "1", "2", "3", "4"]
     assert session.calls == 3
+
+
+def test_acs_rows_builds_geoid_and_nulls_sentinels():
+    header = ["NAME", *ACS_VARIABLES, "state", "county", "tract"]
+    values = ["2694", "-666666666", "1615", "226", "1236", "0", "52", "2694", "212"]
+    table = [header, ["Census Tract 218.16; DeKalb County; Georgia", *values, "13", "089", "021816"]]
+    (row,) = acs_rows(table, 2024)
+    assert row[0] == "13089021816" and row[1] == 2024
+    assert row[2] == 2694            # total_population
+    assert row[3] is None            # median income sentinel -> NULL
+    assert row[6] == 1236
+
+
+def test_census_errors_never_include_the_key():
+    class Boom:
+        def get(self, *a, **k):
+            raise requests.ConnectionError("failed for https://api.census.gov/...&key=SECRET123")
+
+    try:
+        fetch_acs_tracts(Boom(), "SECRET123", 2024)
+    except CensusApiError as exc:
+        assert "SECRET123" not in str(exc) and exc.__cause__ is None
+    else:
+        raise AssertionError("expected CensusApiError")
