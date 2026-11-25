@@ -1,0 +1,316 @@
+{
+  "config": "{\"version\": \"5.59\", \"themeCollection\": {\"customTheme\": {\"name\": \"atl-transit-theme.json\", \"version\": \"5.59\", \"type\": 1}}, \"activeSectionIndex\": 0, \"linguisticSchemaSyncVersion\": 0, \"objects\": {}}",
+  "layoutOptimization": 0,
+  "resourcePackages": [
+    {
+      "resourcePackage": {
+        "name": "RegisteredResources",
+        "type": 1,
+        "disabled": false,
+        "items": [
+          {
+            "type": 202,
+            "name": "atl-transit-theme.json",
+            "path": "atl-transit-theme.json"
+          }
+        ]
+      }
+    }
+  ],
+  "sections": [
+    {
+      "name": "page1",
+      "displayName": "Overview",
+      "displayOption": 1,
+      "width": 1280,
+      "height": 720,
+      "ordinal": 0,
+      "config": "{}",
+      "filters": "[]",
+      "visualContainers": [
+        {
+          "x": 24,
+          "y": 12,
+          "z": 0,
+          "width": 900,
+          "height": 44,
+          "config": "{\"name\": \"ov_title\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 24, \"y\": 12, \"z\": 0, \"width\": 900, \"height\": 44}}], \"singleVisual\": {\"visualType\": \"textbox\", \"objects\": {\"general\": [{\"properties\": {\"paragraphs\": [{\"textRuns\": [{\"value\": \"Atlanta Bus Reliability (MARTA GTFS-realtime)\", \"textStyle\": {\"fontSize\": \"20pt\", \"fontWeight\": \"bold\"}}]}]}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 24,
+          "y": 52,
+          "z": 1,
+          "width": 1200,
+          "height": 30,
+          "config": "{\"name\": \"ov_sub\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 24, \"y\": 52, \"z\": 0, \"width\": 1200, \"height\": 30}}], \"singleVisual\": {\"visualType\": \"textbox\", \"objects\": {\"general\": [{\"properties\": {\"paragraphs\": [{\"textRuns\": [{\"value\": \"On time = \\u22121 to +5 min vs schedule. Gaps are capture outages; from 2026-11-26 capture also pauses nightly 18:00\\u201301:00 Atlanta time (server offline overnight in Europe).\", \"textStyle\": {\"fontSize\": \"10pt\"}}]}]}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 24,
+          "y": 92,
+          "z": 2,
+          "width": 290,
+          "height": 110,
+          "config": "{\"name\": \"ov_c1\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 24, \"y\": 92, \"z\": 0, \"width\": 290, \"height\": 110}}], \"singleVisual\": {\"visualType\": \"card\", \"projections\": {\"Values\": [{\"queryRef\": \"_Measures.On-time %\"}]}, \"prototypeQuery\": {\"Version\": 2, \"From\": [{\"Name\": \"t0\", \"Entity\": \"_Measures\", \"Type\": 0}], \"Select\": [{\"Measure\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"On-time %\"}, \"Name\": \"_Measures.On-time %\"}]}, \"vcObjects\": {\"title\": [{\"properties\": {\"show\": {\"expr\": {\"Literal\": {\"Value\": \"true\"}}}, \"text\": {\"expr\": {\"Literal\": {\"Value\": \"'On-time %'\"}}}}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 330,
+          "y": 92,
+          "z": 3,
+          "width": 290,
+          "height": 110,
+          "config": "{\"name\": \"ov_c2\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 330, \"y\": 92, \"z\": 0, \"width\": 290, \"height\": 110}}], \"singleVisual\": {\"visualType\": \"card\", \"projections\": {\"Values\": [{\"queryRef\": \"_Measures.GPS-checked on-time %\"}]}, \"prototypeQuery\": {\"Version\": 2, \"From\": [{\"Name\": \"t0\", \"Entity\": \"_Measures\", \"Type\": 0}], \"Select\": [{\"Measure\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"GPS-checked on-time %\"}, \"Name\": \"_Measures.GPS-checked on-time %\"}]}, \"vcObjects\": {\"title\": [{\"properties\": {\"show\": {\"expr\": {\"Literal\": {\"Value\": \"true\"}}}, \"text\": {\"expr\": {\"Literal\": {\"Value\": \"'GPS-checked on-time %'\"}}}}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 636,
+          "y": 92,
+          "z": 4,
+          "width": 290,
+          "height": 110,
+          "config": "{\"name\": \"ov_c3\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 636, \"y\": 92, \"z\": 0, \"width\": 290, \"height\": 110}}], \"singleVisual\": {\"visualType\": \"card\", \"projections\": {\"Values\": [{\"queryRef\": \"_Measures.Arrivals\"}]}, \"prototypeQuery\": {\"Version\": 2, \"From\": [{\"Name\": \"t0\", \"Entity\": \"_Measures\", \"Type\": 0}], \"Select\": [{\"Measure\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"Arrivals\"}, \"Name\": \"_Measures.Arrivals\"}]}, \"vcObjects\": {\"title\": [{\"properties\": {\"show\": {\"expr\": {\"Literal\": {\"Value\": \"true\"}}}, \"text\": {\"expr\": {\"Literal\": {\"Value\": \"'Arrivals'\"}}}}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 942,
+          "y": 92,
+          "z": 5,
+          "width": 290,
+          "height": 110,
+          "config": "{\"name\": \"ov_c4\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 942, \"y\": 92, \"z\": 0, \"width\": 290, \"height\": 110}}], \"singleVisual\": {\"visualType\": \"card\", \"projections\": {\"Values\": [{\"queryRef\": \"_Measures.Median delay (min)\"}]}, \"prototypeQuery\": {\"Version\": 2, \"From\": [{\"Name\": \"t0\", \"Entity\": \"_Measures\", \"Type\": 0}], \"Select\": [{\"Measure\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"Median delay (min)\"}, \"Name\": \"_Measures.Median delay (min)\"}]}, \"vcObjects\": {\"title\": [{\"properties\": {\"show\": {\"expr\": {\"Literal\": {\"Value\": \"true\"}}}, \"text\": {\"expr\": {\"Literal\": {\"Value\": \"'Median delay (min)'\"}}}}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 24,
+          "y": 220,
+          "z": 6,
+          "width": 600,
+          "height": 480,
+          "config": "{\"name\": \"ov_trend\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 24, \"y\": 220, \"z\": 0, \"width\": 600, \"height\": 480}}], \"singleVisual\": {\"visualType\": \"lineChart\", \"projections\": {\"Category\": [{\"queryRef\": \"dim_date.date_day\", \"active\": true}], \"Y\": [{\"queryRef\": \"_Measures.On-time %\"}]}, \"prototypeQuery\": {\"Version\": 2, \"From\": [{\"Name\": \"t0\", \"Entity\": \"dim_date\", \"Type\": 0}, {\"Name\": \"t1\", \"Entity\": \"_Measures\", \"Type\": 0}], \"Select\": [{\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"date_day\"}, \"Name\": \"dim_date.date_day\"}, {\"Measure\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t1\"}}, \"Property\": \"On-time %\"}, \"Name\": \"_Measures.On-time %\"}]}, \"vcObjects\": {\"title\": [{\"properties\": {\"show\": {\"expr\": {\"Literal\": {\"Value\": \"true\"}}}, \"text\": {\"expr\": {\"Literal\": {\"Value\": \"'On-time % by service day'\"}}}}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 640,
+          "y": 220,
+          "z": 7,
+          "width": 616,
+          "height": 480,
+          "config": "{\"name\": \"ov_routes\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 640, \"y\": 220, \"z\": 0, \"width\": 616, \"height\": 480}}], \"singleVisual\": {\"visualType\": \"clusteredBarChart\", \"projections\": {\"Category\": [{\"queryRef\": \"dim_route.route_short_name\", \"active\": true}], \"Y\": [{\"queryRef\": \"_Measures.On-time % (routes 300+)\"}]}, \"prototypeQuery\": {\"Version\": 2, \"From\": [{\"Name\": \"t0\", \"Entity\": \"dim_route\", \"Type\": 0}, {\"Name\": \"t1\", \"Entity\": \"_Measures\", \"Type\": 0}], \"Select\": [{\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"route_short_name\"}, \"Name\": \"dim_route.route_short_name\"}, {\"Measure\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t1\"}}, \"Property\": \"On-time % (routes 300+)\"}, \"Name\": \"_Measures.On-time % (routes 300+)\"}], \"OrderBy\": [{\"Direction\": 1, \"Expression\": {\"Measure\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t1\"}}, \"Property\": \"On-time % (routes 300+)\"}}}]}, \"vcObjects\": {\"title\": [{\"properties\": {\"show\": {\"expr\": {\"Literal\": {\"Value\": \"true\"}}}, \"text\": {\"expr\": {\"Literal\": {\"Value\": \"'Least reliable routes (300+ arrivals)'\"}}}}}]}}}",
+          "filters": "[]"
+        }
+      ]
+    },
+    {
+      "name": "page2",
+      "displayName": "Time of day",
+      "displayOption": 1,
+      "width": 1280,
+      "height": 720,
+      "ordinal": 1,
+      "config": "{}",
+      "filters": "[]",
+      "visualContainers": [
+        {
+          "x": 24,
+          "y": 12,
+          "z": 0,
+          "width": 900,
+          "height": 44,
+          "config": "{\"name\": \"td_title\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 24, \"y\": 12, \"z\": 0, \"width\": 900, \"height\": 44}}], \"singleVisual\": {\"visualType\": \"textbox\", \"objects\": {\"general\": [{\"properties\": {\"paragraphs\": [{\"textRuns\": [{\"value\": \"When are buses on time?\", \"textStyle\": {\"fontSize\": \"20pt\", \"fontWeight\": \"bold\"}}]}]}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 1000,
+          "y": 12,
+          "z": 1,
+          "width": 256,
+          "height": 76,
+          "config": "{\"name\": \"td_slicer\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 1000, \"y\": 12, \"z\": 0, \"width\": 256, \"height\": 76}}], \"singleVisual\": {\"visualType\": \"slicer\", \"projections\": {\"Values\": [{\"queryRef\": \"dim_date.is_weekend\"}]}, \"prototypeQuery\": {\"Version\": 2, \"From\": [{\"Name\": \"t0\", \"Entity\": \"dim_date\", \"Type\": 0}], \"Select\": [{\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"is_weekend\"}, \"Name\": \"dim_date.is_weekend\"}]}, \"objects\": {\"data\": [{\"properties\": {\"mode\": {\"expr\": {\"Literal\": {\"Value\": \"'Dropdown'\"}}}}}], \"header\": [{\"properties\": {\"show\": {\"expr\": {\"Literal\": {\"Value\": \"false\"}}}}}]}, \"vcObjects\": {\"title\": [{\"properties\": {\"show\": {\"expr\": {\"Literal\": {\"Value\": \"true\"}}}, \"text\": {\"expr\": {\"Literal\": {\"Value\": \"'Weekend?'\"}}}}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 24,
+          "y": 100,
+          "z": 2,
+          "width": 1232,
+          "height": 300,
+          "config": "{\"name\": \"td_ontime\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 24, \"y\": 100, \"z\": 0, \"width\": 1232, \"height\": 300}}], \"singleVisual\": {\"visualType\": \"clusteredColumnChart\", \"projections\": {\"Category\": [{\"queryRef\": \"fct_stop_arrival.scheduled_hour_local\", \"active\": true}], \"Y\": [{\"queryRef\": \"_Measures.On-time %\"}]}, \"prototypeQuery\": {\"Version\": 2, \"From\": [{\"Name\": \"t0\", \"Entity\": \"fct_stop_arrival\", \"Type\": 0}, {\"Name\": \"t1\", \"Entity\": \"_Measures\", \"Type\": 0}], \"Select\": [{\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"scheduled_hour_local\"}, \"Name\": \"fct_stop_arrival.scheduled_hour_local\"}, {\"Measure\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t1\"}}, \"Property\": \"On-time %\"}, \"Name\": \"_Measures.On-time %\"}], \"OrderBy\": [{\"Direction\": 1, \"Expression\": {\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"scheduled_hour_local\"}}}]}, \"vcObjects\": {\"title\": [{\"properties\": {\"show\": {\"expr\": {\"Literal\": {\"Value\": \"true\"}}}, \"text\": {\"expr\": {\"Literal\": {\"Value\": \"'On-time % by scheduled hour (Atlanta time)'\"}}}}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 24,
+          "y": 410,
+          "z": 3,
+          "width": 1232,
+          "height": 290,
+          "config": "{\"name\": \"td_mix\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 24, \"y\": 410, \"z\": 0, \"width\": 1232, \"height\": 290}}], \"singleVisual\": {\"visualType\": \"clusteredColumnChart\", \"projections\": {\"Category\": [{\"queryRef\": \"fct_stop_arrival.scheduled_hour_local\", \"active\": true}], \"Y\": [{\"queryRef\": \"_Measures.Early %\"}, {\"queryRef\": \"_Measures.Late %\"}]}, \"prototypeQuery\": {\"Version\": 2, \"From\": [{\"Name\": \"t0\", \"Entity\": \"fct_stop_arrival\", \"Type\": 0}, {\"Name\": \"t1\", \"Entity\": \"_Measures\", \"Type\": 0}], \"Select\": [{\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"scheduled_hour_local\"}, \"Name\": \"fct_stop_arrival.scheduled_hour_local\"}, {\"Measure\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t1\"}}, \"Property\": \"Early %\"}, \"Name\": \"_Measures.Early %\"}, {\"Measure\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t1\"}}, \"Property\": \"Late %\"}, \"Name\": \"_Measures.Late %\"}], \"OrderBy\": [{\"Direction\": 1, \"Expression\": {\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"scheduled_hour_local\"}}}]}, \"vcObjects\": {\"title\": [{\"properties\": {\"show\": {\"expr\": {\"Literal\": {\"Value\": \"true\"}}}, \"text\": {\"expr\": {\"Literal\": {\"Value\": \"'Early vs late by hour'\"}}}}}]}}}",
+          "filters": "[]"
+        }
+      ]
+    },
+    {
+      "name": "page3",
+      "displayName": "Stops map",
+      "displayOption": 1,
+      "width": 1280,
+      "height": 720,
+      "ordinal": 2,
+      "config": "{}",
+      "filters": "[]",
+      "visualContainers": [
+        {
+          "x": 24,
+          "y": 12,
+          "z": 0,
+          "width": 900,
+          "height": 44,
+          "config": "{\"name\": \"st_title\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 24, \"y\": 12, \"z\": 0, \"width\": 900, \"height\": 44}}], \"singleVisual\": {\"visualType\": \"textbox\", \"objects\": {\"general\": [{\"properties\": {\"paragraphs\": [{\"textRuns\": [{\"value\": \"Stops: where is service reliable?\", \"textStyle\": {\"fontSize\": \"20pt\", \"fontWeight\": \"bold\"}}]}]}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 24,
+          "y": 64,
+          "z": 1,
+          "width": 700,
+          "height": 636,
+          "config": "{\"name\": \"st_map\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 24, \"y\": 64, \"z\": 0, \"width\": 700, \"height\": 636}}], \"singleVisual\": {\"visualType\": \"map\", \"projections\": {\"Category\": [{\"queryRef\": \"dim_stop.stop_name\", \"active\": true}], \"Y\": [{\"queryRef\": \"Avg(dim_stop.stop_lat)\"}], \"X\": [{\"queryRef\": \"Avg(dim_stop.stop_lon)\"}], \"Size\": [{\"queryRef\": \"_Measures.Arrivals\"}], \"Tooltips\": [{\"queryRef\": \"_Measures.On-time %\"}]}, \"prototypeQuery\": {\"Version\": 2, \"From\": [{\"Name\": \"t0\", \"Entity\": \"dim_stop\", \"Type\": 0}, {\"Name\": \"t1\", \"Entity\": \"_Measures\", \"Type\": 0}], \"Select\": [{\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"stop_name\"}, \"Name\": \"dim_stop.stop_name\"}, {\"Aggregation\": {\"Expression\": {\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"stop_lat\"}}, \"Function\": 1}, \"Name\": \"Avg(dim_stop.stop_lat)\"}, {\"Aggregation\": {\"Expression\": {\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"stop_lon\"}}, \"Function\": 1}, \"Name\": \"Avg(dim_stop.stop_lon)\"}, {\"Measure\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t1\"}}, \"Property\": \"Arrivals\"}, \"Name\": \"_Measures.Arrivals\"}, {\"Measure\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t1\"}}, \"Property\": \"On-time %\"}, \"Name\": \"_Measures.On-time %\"}]}, \"vcObjects\": {\"title\": [{\"properties\": {\"show\": {\"expr\": {\"Literal\": {\"Value\": \"true\"}}}, \"text\": {\"expr\": {\"Literal\": {\"Value\": \"'Observed stops (size = arrivals)'\"}}}}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 740,
+          "y": 64,
+          "z": 2,
+          "width": 516,
+          "height": 636,
+          "config": "{\"name\": \"st_table\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 740, \"y\": 64, \"z\": 0, \"width\": 516, \"height\": 636}}], \"singleVisual\": {\"visualType\": \"tableEx\", \"projections\": {\"Values\": [{\"queryRef\": \"dim_stop.stop_name\"}, {\"queryRef\": \"_Measures.Arrivals\"}, {\"queryRef\": \"_Measures.On-time % (stops 50+)\"}, {\"queryRef\": \"_Measures.Not on time % (stops 50+)\"}]}, \"prototypeQuery\": {\"Version\": 2, \"From\": [{\"Name\": \"t0\", \"Entity\": \"dim_stop\", \"Type\": 0}, {\"Name\": \"t1\", \"Entity\": \"_Measures\", \"Type\": 0}], \"Select\": [{\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"stop_name\"}, \"Name\": \"dim_stop.stop_name\"}, {\"Measure\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t1\"}}, \"Property\": \"Arrivals\"}, \"Name\": \"_Measures.Arrivals\"}, {\"Measure\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t1\"}}, \"Property\": \"On-time % (stops 50+)\"}, \"Name\": \"_Measures.On-time % (stops 50+)\"}, {\"Measure\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t1\"}}, \"Property\": \"Not on time % (stops 50+)\"}, \"Name\": \"_Measures.Not on time % (stops 50+)\"}], \"OrderBy\": [{\"Direction\": 2, \"Expression\": {\"Measure\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t1\"}}, \"Property\": \"Not on time % (stops 50+)\"}}}]}, \"vcObjects\": {\"title\": [{\"properties\": {\"show\": {\"expr\": {\"Literal\": {\"Value\": \"true\"}}}, \"text\": {\"expr\": {\"Literal\": {\"Value\": \"'Least reliable stops (50+ arrivals)'\"}}}}}]}}}",
+          "filters": "[]"
+        }
+      ]
+    },
+    {
+      "name": "page4",
+      "displayName": "Equity",
+      "displayOption": 1,
+      "width": 1280,
+      "height": 720,
+      "ordinal": 3,
+      "config": "{}",
+      "filters": "[]",
+      "visualContainers": [
+        {
+          "x": 24,
+          "y": 12,
+          "z": 0,
+          "width": 1100,
+          "height": 44,
+          "config": "{\"name\": \"eq_title\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 24, \"y\": 12, \"z\": 0, \"width\": 1100, \"height\": 44}}], \"singleVisual\": {\"visualType\": \"textbox\", \"objects\": {\"general\": [{\"properties\": {\"paragraphs\": [{\"textRuns\": [{\"value\": \"Equity: is service worse where fewer households have a car?\", \"textStyle\": {\"fontSize\": \"20pt\", \"fontWeight\": \"bold\"}}]}]}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 24,
+          "y": 52,
+          "z": 1,
+          "width": 1200,
+          "height": 30,
+          "config": "{\"name\": \"eq_sub\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 24, \"y\": 52, \"z\": 0, \"width\": 1200, \"height\": 30}}], \"singleVisual\": {\"visualType\": \"textbox\", \"objects\": {\"general\": [{\"properties\": {\"paragraphs\": [{\"textRuns\": [{\"value\": \"One dot per Census tract with 50+ observed arrivals. Car-free share from the ACS 5-year survey.\", \"textStyle\": {\"fontSize\": \"10pt\"}}]}]}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 24,
+          "y": 92,
+          "z": 2,
+          "width": 820,
+          "height": 608,
+          "config": "{\"name\": \"eq_scatter\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 24, \"y\": 92, \"z\": 0, \"width\": 820, \"height\": 608}}], \"singleVisual\": {\"visualType\": \"scatterChart\", \"projections\": {\"Category\": [{\"queryRef\": \"mart_tract_service_equity.geoid\", \"active\": true}], \"X\": [{\"queryRef\": \"Sum(mart_tract_service_equity.pct_households_no_vehicle)\"}], \"Y\": [{\"queryRef\": \"Sum(mart_tract_service_equity.pct_on_time)\"}]}, \"prototypeQuery\": {\"Version\": 2, \"From\": [{\"Name\": \"t0\", \"Entity\": \"mart_tract_service_equity\", \"Type\": 0}], \"Select\": [{\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"geoid\"}, \"Name\": \"mart_tract_service_equity.geoid\"}, {\"Aggregation\": {\"Expression\": {\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"pct_households_no_vehicle\"}}, \"Function\": 0}, \"Name\": \"Sum(mart_tract_service_equity.pct_households_no_vehicle)\"}, {\"Aggregation\": {\"Expression\": {\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"pct_on_time\"}}, \"Function\": 0}, \"Name\": \"Sum(mart_tract_service_equity.pct_on_time)\"}]}, \"vcObjects\": {\"title\": [{\"properties\": {\"show\": {\"expr\": {\"Literal\": {\"Value\": \"true\"}}}, \"text\": {\"expr\": {\"Literal\": {\"Value\": \"'Car-free households % (x) vs on-time % (y)'\"}}}}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 860,
+          "y": 92,
+          "z": 3,
+          "width": 396,
+          "height": 608,
+          "config": "{\"name\": \"eq_county\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 860, \"y\": 92, \"z\": 0, \"width\": 396, \"height\": 608}}], \"singleVisual\": {\"visualType\": \"tableEx\", \"projections\": {\"Values\": [{\"queryRef\": \"mart_tract_service_equity.county_name\"}, {\"queryRef\": \"Sum(mart_tract_service_equity.arrivals_observed)\"}, {\"queryRef\": \"Avg(mart_tract_service_equity.pct_on_time)\"}]}, \"prototypeQuery\": {\"Version\": 2, \"From\": [{\"Name\": \"t0\", \"Entity\": \"mart_tract_service_equity\", \"Type\": 0}], \"Select\": [{\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"county_name\"}, \"Name\": \"mart_tract_service_equity.county_name\"}, {\"Aggregation\": {\"Expression\": {\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"arrivals_observed\"}}, \"Function\": 0}, \"Name\": \"Sum(mart_tract_service_equity.arrivals_observed)\"}, {\"Aggregation\": {\"Expression\": {\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"pct_on_time\"}}, \"Function\": 1}, \"Name\": \"Avg(mart_tract_service_equity.pct_on_time)\"}], \"OrderBy\": [{\"Direction\": 1, \"Expression\": {\"Aggregation\": {\"Expression\": {\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"pct_on_time\"}}, \"Function\": 1}}}]}, \"vcObjects\": {\"title\": [{\"properties\": {\"show\": {\"expr\": {\"Literal\": {\"Value\": \"true\"}}}, \"text\": {\"expr\": {\"Literal\": {\"Value\": \"'By county (average of tracts)'\"}}}}}]}}}",
+          "filters": "[]"
+        }
+      ]
+    },
+    {
+      "name": "page5",
+      "displayName": "GPS check",
+      "displayOption": 1,
+      "width": 1280,
+      "height": 720,
+      "ordinal": 4,
+      "config": "{}",
+      "filters": "[]",
+      "visualContainers": [
+        {
+          "x": 24,
+          "y": 12,
+          "z": 0,
+          "width": 1100,
+          "height": 44,
+          "config": "{\"name\": \"gp_title\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 24, \"y\": 12, \"z\": 0, \"width\": 1100, \"height\": 44}}], \"singleVisual\": {\"visualType\": \"textbox\", \"objects\": {\"general\": [{\"properties\": {\"paragraphs\": [{\"textRuns\": [{\"value\": \"Data quality: does the bus's GPS agree with the feed?\", \"textStyle\": {\"fontSize\": \"20pt\", \"fontWeight\": \"bold\"}}]}]}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 24,
+          "y": 52,
+          "z": 1,
+          "width": 1200,
+          "height": 30,
+          "config": "{\"name\": \"gp_sub\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 24, \"y\": 52, \"z\": 0, \"width\": 1200, \"height\": 30}}], \"singleVisual\": {\"visualType\": \"textbox\", \"objects\": {\"general\": [{\"properties\": {\"paragraphs\": [{\"textRuns\": [{\"value\": \"Each feed arrival is matched to the bus's nearest GPS fix (Spark range join). Rows: the feed's verdict; columns: the GPS verdict; values: % of the row.\", \"textStyle\": {\"fontSize\": \"10pt\"}}]}]}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 24,
+          "y": 92,
+          "z": 2,
+          "width": 400,
+          "height": 110,
+          "config": "{\"name\": \"gp_c1\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 24, \"y\": 92, \"z\": 0, \"width\": 400, \"height\": 110}}], \"singleVisual\": {\"visualType\": \"card\", \"projections\": {\"Values\": [{\"queryRef\": \"_Measures.GPS confirmed %\"}]}, \"prototypeQuery\": {\"Version\": 2, \"From\": [{\"Name\": \"t0\", \"Entity\": \"_Measures\", \"Type\": 0}], \"Select\": [{\"Measure\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"GPS confirmed %\"}, \"Name\": \"_Measures.GPS confirmed %\"}]}, \"vcObjects\": {\"title\": [{\"properties\": {\"show\": {\"expr\": {\"Literal\": {\"Value\": \"true\"}}}, \"text\": {\"expr\": {\"Literal\": {\"Value\": \"'GPS confirmed %'\"}}}}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 440,
+          "y": 92,
+          "z": 3,
+          "width": 400,
+          "height": 110,
+          "config": "{\"name\": \"gp_c2\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 440, \"y\": 92, \"z\": 0, \"width\": 400, \"height\": 110}}], \"singleVisual\": {\"visualType\": \"card\", \"projections\": {\"Values\": [{\"queryRef\": \"_Measures.GPS-checked on-time %\"}]}, \"prototypeQuery\": {\"Version\": 2, \"From\": [{\"Name\": \"t0\", \"Entity\": \"_Measures\", \"Type\": 0}], \"Select\": [{\"Measure\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"GPS-checked on-time %\"}, \"Name\": \"_Measures.GPS-checked on-time %\"}]}, \"vcObjects\": {\"title\": [{\"properties\": {\"show\": {\"expr\": {\"Literal\": {\"Value\": \"true\"}}}, \"text\": {\"expr\": {\"Literal\": {\"Value\": \"'GPS-checked on-time %'\"}}}}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 856,
+          "y": 92,
+          "z": 4,
+          "width": 400,
+          "height": 110,
+          "config": "{\"name\": \"gp_c3\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 856, \"y\": 92, \"z\": 0, \"width\": 400, \"height\": 110}}], \"singleVisual\": {\"visualType\": \"card\", \"projections\": {\"Values\": [{\"queryRef\": \"_Measures.On-time %\"}]}, \"prototypeQuery\": {\"Version\": 2, \"From\": [{\"Name\": \"t0\", \"Entity\": \"_Measures\", \"Type\": 0}], \"Select\": [{\"Measure\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"On-time %\"}, \"Name\": \"_Measures.On-time %\"}]}, \"vcObjects\": {\"title\": [{\"properties\": {\"show\": {\"expr\": {\"Literal\": {\"Value\": \"true\"}}}, \"text\": {\"expr\": {\"Literal\": {\"Value\": \"'On-time %'\"}}}}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 24,
+          "y": 220,
+          "z": 5,
+          "width": 1232,
+          "height": 300,
+          "config": "{\"name\": \"gp_matrix\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 24, \"y\": 220, \"z\": 0, \"width\": 1232, \"height\": 300}}], \"singleVisual\": {\"visualType\": \"pivotTable\", \"projections\": {\"Rows\": [{\"queryRef\": \"mart_gps_validation.feed_class\", \"active\": true}], \"Columns\": [{\"queryRef\": \"mart_gps_validation.gps_class\", \"active\": true}], \"Values\": [{\"queryRef\": \"Sum(mart_gps_validation.pct_of_feed_class)\"}]}, \"prototypeQuery\": {\"Version\": 2, \"From\": [{\"Name\": \"t0\", \"Entity\": \"mart_gps_validation\", \"Type\": 0}], \"Select\": [{\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"feed_class\"}, \"Name\": \"mart_gps_validation.feed_class\"}, {\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"gps_class\"}, \"Name\": \"mart_gps_validation.gps_class\"}, {\"Aggregation\": {\"Expression\": {\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"pct_of_feed_class\"}}, \"Function\": 0}, \"Name\": \"Sum(mart_gps_validation.pct_of_feed_class)\"}]}, \"objects\": {\"subTotals\": [{\"properties\": {\"rowSubtotals\": {\"expr\": {\"Literal\": {\"Value\": \"false\"}}}, \"columnSubtotals\": {\"expr\": {\"Literal\": {\"Value\": \"false\"}}}}}]}, \"vcObjects\": {\"title\": [{\"properties\": {\"show\": {\"expr\": {\"Literal\": {\"Value\": \"true\"}}}, \"text\": {\"expr\": {\"Literal\": {\"Value\": \"'Feed verdict (rows) vs GPS verdict (columns), % of row'\"}}}}}]}}}",
+          "filters": "[]"
+        },
+        {
+          "x": 24,
+          "y": 536,
+          "z": 6,
+          "width": 1232,
+          "height": 164,
+          "config": "{\"name\": \"gp_counts\", \"layouts\": [{\"id\": 0, \"position\": {\"x\": 24, \"y\": 536, \"z\": 0, \"width\": 1232, \"height\": 164}}], \"singleVisual\": {\"visualType\": \"clusteredBarChart\", \"projections\": {\"Category\": [{\"queryRef\": \"mart_gps_validation.gps_class\", \"active\": true}], \"Y\": [{\"queryRef\": \"Sum(mart_gps_validation.arrivals)\"}]}, \"prototypeQuery\": {\"Version\": 2, \"From\": [{\"Name\": \"t0\", \"Entity\": \"mart_gps_validation\", \"Type\": 0}], \"Select\": [{\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"gps_class\"}, \"Name\": \"mart_gps_validation.gps_class\"}, {\"Aggregation\": {\"Expression\": {\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"arrivals\"}}, \"Function\": 0}, \"Name\": \"Sum(mart_gps_validation.arrivals)\"}], \"OrderBy\": [{\"Direction\": 2, \"Expression\": {\"Aggregation\": {\"Expression\": {\"Column\": {\"Expression\": {\"SourceRef\": {\"Source\": \"t0\"}}, \"Property\": \"arrivals\"}}, \"Function\": 0}}}]}, \"vcObjects\": {\"title\": [{\"properties\": {\"show\": {\"expr\": {\"Literal\": {\"Value\": \"true\"}}}, \"text\": {\"expr\": {\"Literal\": {\"Value\": \"'Arrivals by GPS verdict'\"}}}}}]}}}",
+          "filters": "[]"
+        }
+      ]
+    }
+  ]
+}

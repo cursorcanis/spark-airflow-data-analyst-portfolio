@@ -4,6 +4,24 @@ The report is built by hand in Power BI Desktop on a Windows PC, against the **m
 **read-only** login. Everything you need is here: connection steps, the model, the measures
 ([measures.dax](measures.dax)) and a color theme ([atl-transit-theme.json](atl-transit-theme.json)).
 
+## Fast path: generate the whole report (report as code)
+
+`build_pbip.py` writes the complete Power BI Project from code: the connection (a `PgServer` parameter), the 10 tables
+in Import mode with geometry columns left out, the 4 relationships, `dim_date` marked as the date table, every
+measure in [measures.dax](measures.dax) and 5 finished pages (Overview, Time of day, Stops map, Equity, GPS check).
+
+```bash
+python bi/powerbi/build_pbip.py --server <server-tailscale-ip>:5432 --out bi/powerbi/local   # gitignored copy
+```
+1. Open `bi\powerbi\local\ATL Transit.pbip` in Power BI Desktop (Windows Tailscale must be connected).
+2. **Refresh**, then enter credentials once: **Database** tab, user `reporting` (password: step 2 below).
+3. Stops map: map visuals are off by default. Turn them on in **File > Options and settings > Options >
+   Global > Security > Map and filled map visuals**.
+4. **Ctrl+S** keeps the loaded data in the local copy.
+
+The committed `report/` folder is the same project with a placeholder server address. Change it in
+**Transform data > Edit parameters > PgServer**. The manual steps below explain what the generator builds.
+
 ## 1. Connect
 
 1. Install **Power BI Desktop** (Microsoft Store, free).

@@ -1,0 +1,975 @@
+{
+  "name": "ATL Transit",
+  "compatibilityLevel": 1567,
+  "model": {
+    "culture": "en-US",
+    "defaultPowerBIDataSourceVersion": "powerBI_V3",
+    "sourceQueryCulture": "en-US",
+    "dataAccessOptions": {
+      "legacyRedirects": true,
+      "returnErrorValuesAsNull": true
+    },
+    "tables": [
+      {
+        "name": "dim_date",
+        "columns": [
+          {
+            "name": "date_day",
+            "dataType": "dateTime",
+            "sourceColumn": "date_day",
+            "summarizeBy": "none",
+            "formatString": "yyyy-mm-dd",
+            "isKey": true
+          },
+          {
+            "name": "iso_day_of_week",
+            "dataType": "int64",
+            "sourceColumn": "iso_day_of_week",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "day_name",
+            "dataType": "string",
+            "sourceColumn": "day_name",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "is_weekend",
+            "dataType": "boolean",
+            "sourceColumn": "is_weekend",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "month",
+            "dataType": "int64",
+            "sourceColumn": "month",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "year",
+            "dataType": "int64",
+            "sourceColumn": "year",
+            "summarizeBy": "none"
+          }
+        ],
+        "partitions": [
+          {
+            "name": "dim_date",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "let",
+                "    Source = PostgreSQL.Database(PgServer, \"warehouse\"),",
+                "    Data = Source{[Schema = \"marts\", Item = \"dim_date\"]}[Data],",
+                "    Kept = Table.SelectColumns(Data, {\"date_day\", \"iso_day_of_week\", \"day_name\", \"is_weekend\", \"month\", \"year\"})",
+                "in",
+                "    Kept"
+              ]
+            }
+          }
+        ],
+        "dataCategory": "Time"
+      },
+      {
+        "name": "dim_route",
+        "columns": [
+          {
+            "name": "route_id",
+            "dataType": "string",
+            "sourceColumn": "route_id",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "route_short_name",
+            "dataType": "string",
+            "sourceColumn": "route_short_name",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "route_long_name",
+            "dataType": "string",
+            "sourceColumn": "route_long_name",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "route_mode",
+            "dataType": "string",
+            "sourceColumn": "route_mode",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "route_color",
+            "dataType": "string",
+            "sourceColumn": "route_color",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "scheduled_trips_in_feed",
+            "dataType": "int64",
+            "sourceColumn": "scheduled_trips_in_feed",
+            "summarizeBy": "sum"
+          }
+        ],
+        "partitions": [
+          {
+            "name": "dim_route",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "let",
+                "    Source = PostgreSQL.Database(PgServer, \"warehouse\"),",
+                "    Data = Source{[Schema = \"marts\", Item = \"dim_route\"]}[Data],",
+                "    Kept = Table.SelectColumns(Data, {\"route_id\", \"route_short_name\", \"route_long_name\", \"route_mode\", \"route_color\", \"scheduled_trips_in_feed\"})",
+                "in",
+                "    Kept"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "dim_stop",
+        "columns": [
+          {
+            "name": "stop_id",
+            "dataType": "string",
+            "sourceColumn": "stop_id",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "stop_code",
+            "dataType": "string",
+            "sourceColumn": "stop_code",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "stop_name",
+            "dataType": "string",
+            "sourceColumn": "stop_name",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "stop_lat",
+            "dataType": "double",
+            "sourceColumn": "stop_lat",
+            "summarizeBy": "sum",
+            "formatString": "0.0",
+            "dataCategory": "Latitude"
+          },
+          {
+            "name": "stop_lon",
+            "dataType": "double",
+            "sourceColumn": "stop_lon",
+            "summarizeBy": "sum",
+            "formatString": "0.0",
+            "dataCategory": "Longitude"
+          },
+          {
+            "name": "is_rail_station_area",
+            "dataType": "boolean",
+            "sourceColumn": "is_rail_station_area",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "is_wheelchair_accessible",
+            "dataType": "boolean",
+            "sourceColumn": "is_wheelchair_accessible",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "tract_geoid",
+            "dataType": "string",
+            "sourceColumn": "tract_geoid",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "county_name",
+            "dataType": "string",
+            "sourceColumn": "county_name",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "h3_cell",
+            "dataType": "string",
+            "sourceColumn": "h3_cell",
+            "summarizeBy": "none"
+          }
+        ],
+        "partitions": [
+          {
+            "name": "dim_stop",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "let",
+                "    Source = PostgreSQL.Database(PgServer, \"warehouse\"),",
+                "    Data = Source{[Schema = \"marts\", Item = \"dim_stop\"]}[Data],",
+                "    Kept = Table.SelectColumns(Data, {\"stop_id\", \"stop_code\", \"stop_name\", \"stop_lat\", \"stop_lon\", \"is_rail_station_area\", \"is_wheelchair_accessible\", \"tract_geoid\", \"county_name\", \"h3_cell\"})",
+                "in",
+                "    Kept"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "dim_tract",
+        "columns": [
+          {
+            "name": "geoid",
+            "dataType": "string",
+            "sourceColumn": "geoid",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "county_name",
+            "dataType": "string",
+            "sourceColumn": "county_name",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "tract_name",
+            "dataType": "string",
+            "sourceColumn": "tract_name",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "land_km2",
+            "dataType": "double",
+            "sourceColumn": "land_km2",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          },
+          {
+            "name": "acs_year",
+            "dataType": "int64",
+            "sourceColumn": "acs_year",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "total_population",
+            "dataType": "int64",
+            "sourceColumn": "total_population",
+            "summarizeBy": "sum"
+          },
+          {
+            "name": "population_per_km2",
+            "dataType": "double",
+            "sourceColumn": "population_per_km2",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          },
+          {
+            "name": "median_household_income",
+            "dataType": "int64",
+            "sourceColumn": "median_household_income",
+            "summarizeBy": "sum"
+          },
+          {
+            "name": "households_no_vehicle",
+            "dataType": "int64",
+            "sourceColumn": "households_no_vehicle",
+            "summarizeBy": "sum"
+          },
+          {
+            "name": "pct_households_no_vehicle",
+            "dataType": "double",
+            "sourceColumn": "pct_households_no_vehicle",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          },
+          {
+            "name": "pct_transit_commute",
+            "dataType": "double",
+            "sourceColumn": "pct_transit_commute",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          },
+          {
+            "name": "poverty_rate",
+            "dataType": "double",
+            "sourceColumn": "poverty_rate",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          }
+        ],
+        "partitions": [
+          {
+            "name": "dim_tract",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "let",
+                "    Source = PostgreSQL.Database(PgServer, \"warehouse\"),",
+                "    Data = Source{[Schema = \"marts\", Item = \"dim_tract\"]}[Data],",
+                "    Kept = Table.SelectColumns(Data, {\"geoid\", \"county_name\", \"tract_name\", \"land_km2\", \"acs_year\", \"total_population\", \"population_per_km2\", \"median_household_income\", \"households_no_vehicle\", \"pct_households_no_vehicle\", \"pct_transit_commute\", \"poverty_rate\"})",
+                "in",
+                "    Kept"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "fct_stop_arrival",
+        "columns": [
+          {
+            "name": "service_date",
+            "dataType": "dateTime",
+            "sourceColumn": "service_date",
+            "summarizeBy": "none",
+            "formatString": "yyyy-mm-dd"
+          },
+          {
+            "name": "trip_id",
+            "dataType": "string",
+            "sourceColumn": "trip_id",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "stop_sequence",
+            "dataType": "int64",
+            "sourceColumn": "stop_sequence",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "route_id",
+            "dataType": "string",
+            "sourceColumn": "route_id",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "stop_id",
+            "dataType": "string",
+            "sourceColumn": "stop_id",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "direction_id",
+            "dataType": "int64",
+            "sourceColumn": "direction_id",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "vehicle_id",
+            "dataType": "string",
+            "sourceColumn": "vehicle_id",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "scheduled_arrival_at",
+            "dataType": "dateTime",
+            "sourceColumn": "scheduled_arrival_at",
+            "summarizeBy": "none",
+            "formatString": "yyyy-mm-dd hh:nn"
+          },
+          {
+            "name": "observed_arrival_at",
+            "dataType": "dateTime",
+            "sourceColumn": "observed_arrival_at",
+            "summarizeBy": "none",
+            "formatString": "yyyy-mm-dd hh:nn"
+          },
+          {
+            "name": "delay_s",
+            "dataType": "int64",
+            "sourceColumn": "delay_s",
+            "summarizeBy": "sum"
+          },
+          {
+            "name": "delay_min",
+            "dataType": "double",
+            "sourceColumn": "delay_min",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          },
+          {
+            "name": "scheduled_hour_local",
+            "dataType": "int64",
+            "sourceColumn": "scheduled_hour_local",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "is_on_time",
+            "dataType": "boolean",
+            "sourceColumn": "is_on_time",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "is_late",
+            "dataType": "boolean",
+            "sourceColumn": "is_late",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "is_early",
+            "dataType": "boolean",
+            "sourceColumn": "is_early",
+            "summarizeBy": "none"
+          }
+        ],
+        "partitions": [
+          {
+            "name": "fct_stop_arrival",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "let",
+                "    Source = PostgreSQL.Database(PgServer, \"warehouse\"),",
+                "    Data = Source{[Schema = \"marts\", Item = \"fct_stop_arrival\"]}[Data],",
+                "    Kept = Table.SelectColumns(Data, {\"service_date\", \"trip_id\", \"stop_sequence\", \"route_id\", \"stop_id\", \"direction_id\", \"vehicle_id\", \"scheduled_arrival_at\", \"observed_arrival_at\", \"delay_s\", \"delay_min\", \"scheduled_hour_local\", \"is_on_time\", \"is_late\", \"is_early\"})",
+                "in",
+                "    Kept"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "mart_route_on_time_daily",
+        "columns": [
+          {
+            "name": "service_date",
+            "dataType": "dateTime",
+            "sourceColumn": "service_date",
+            "summarizeBy": "none",
+            "formatString": "yyyy-mm-dd"
+          },
+          {
+            "name": "route_id",
+            "dataType": "string",
+            "sourceColumn": "route_id",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "route_short_name",
+            "dataType": "string",
+            "sourceColumn": "route_short_name",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "route_long_name",
+            "dataType": "string",
+            "sourceColumn": "route_long_name",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "route_mode",
+            "dataType": "string",
+            "sourceColumn": "route_mode",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "arrivals",
+            "dataType": "int64",
+            "sourceColumn": "arrivals",
+            "summarizeBy": "sum"
+          },
+          {
+            "name": "pct_on_time",
+            "dataType": "double",
+            "sourceColumn": "pct_on_time",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          },
+          {
+            "name": "pct_late",
+            "dataType": "double",
+            "sourceColumn": "pct_late",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          },
+          {
+            "name": "pct_early",
+            "dataType": "double",
+            "sourceColumn": "pct_early",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          },
+          {
+            "name": "median_delay_min",
+            "dataType": "double",
+            "sourceColumn": "median_delay_min",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          },
+          {
+            "name": "p90_delay_min",
+            "dataType": "double",
+            "sourceColumn": "p90_delay_min",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          }
+        ],
+        "partitions": [
+          {
+            "name": "mart_route_on_time_daily",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "let",
+                "    Source = PostgreSQL.Database(PgServer, \"warehouse\"),",
+                "    Data = Source{[Schema = \"marts\", Item = \"mart_route_on_time_daily\"]}[Data],",
+                "    Kept = Table.SelectColumns(Data, {\"service_date\", \"route_id\", \"route_short_name\", \"route_long_name\", \"route_mode\", \"arrivals\", \"pct_on_time\", \"pct_late\", \"pct_early\", \"median_delay_min\", \"p90_delay_min\"})",
+                "in",
+                "    Kept"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "mart_on_time_by_hour",
+        "columns": [
+          {
+            "name": "scheduled_hour_local",
+            "dataType": "int64",
+            "sourceColumn": "scheduled_hour_local",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "is_weekend",
+            "dataType": "boolean",
+            "sourceColumn": "is_weekend",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "arrivals",
+            "dataType": "int64",
+            "sourceColumn": "arrivals",
+            "summarizeBy": "sum"
+          },
+          {
+            "name": "pct_on_time",
+            "dataType": "double",
+            "sourceColumn": "pct_on_time",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          },
+          {
+            "name": "median_delay_min",
+            "dataType": "double",
+            "sourceColumn": "median_delay_min",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          }
+        ],
+        "partitions": [
+          {
+            "name": "mart_on_time_by_hour",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "let",
+                "    Source = PostgreSQL.Database(PgServer, \"warehouse\"),",
+                "    Data = Source{[Schema = \"marts\", Item = \"mart_on_time_by_hour\"]}[Data],",
+                "    Kept = Table.SelectColumns(Data, {\"scheduled_hour_local\", \"is_weekend\", \"arrivals\", \"pct_on_time\", \"median_delay_min\"})",
+                "in",
+                "    Kept"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "mart_tract_service_equity",
+        "columns": [
+          {
+            "name": "geoid",
+            "dataType": "string",
+            "sourceColumn": "geoid",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "county_name",
+            "dataType": "string",
+            "sourceColumn": "county_name",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "total_population",
+            "dataType": "int64",
+            "sourceColumn": "total_population",
+            "summarizeBy": "sum"
+          },
+          {
+            "name": "median_household_income",
+            "dataType": "int64",
+            "sourceColumn": "median_household_income",
+            "summarizeBy": "sum"
+          },
+          {
+            "name": "pct_households_no_vehicle",
+            "dataType": "double",
+            "sourceColumn": "pct_households_no_vehicle",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          },
+          {
+            "name": "pct_transit_commute",
+            "dataType": "double",
+            "sourceColumn": "pct_transit_commute",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          },
+          {
+            "name": "poverty_rate",
+            "dataType": "double",
+            "sourceColumn": "poverty_rate",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          },
+          {
+            "name": "stops_observed",
+            "dataType": "int64",
+            "sourceColumn": "stops_observed",
+            "summarizeBy": "sum"
+          },
+          {
+            "name": "arrivals_observed",
+            "dataType": "int64",
+            "sourceColumn": "arrivals_observed",
+            "summarizeBy": "sum"
+          },
+          {
+            "name": "pct_on_time",
+            "dataType": "double",
+            "sourceColumn": "pct_on_time",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          },
+          {
+            "name": "median_delay_min",
+            "dataType": "double",
+            "sourceColumn": "median_delay_min",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          }
+        ],
+        "partitions": [
+          {
+            "name": "mart_tract_service_equity",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "let",
+                "    Source = PostgreSQL.Database(PgServer, \"warehouse\"),",
+                "    Data = Source{[Schema = \"marts\", Item = \"mart_tract_service_equity\"]}[Data],",
+                "    Kept = Table.SelectColumns(Data, {\"geoid\", \"county_name\", \"total_population\", \"median_household_income\", \"pct_households_no_vehicle\", \"pct_transit_commute\", \"poverty_rate\", \"stops_observed\", \"arrivals_observed\", \"pct_on_time\", \"median_delay_min\"}),",
+                "    Enough = Table.SelectRows(Kept, each [arrivals_observed] >= 50)",
+                "in",
+                "    Enough"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "mart_gps_validation",
+        "columns": [
+          {
+            "name": "feed_class",
+            "dataType": "string",
+            "sourceColumn": "feed_class",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "gps_class",
+            "dataType": "string",
+            "sourceColumn": "gps_class",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "arrivals",
+            "dataType": "int64",
+            "sourceColumn": "arrivals",
+            "summarizeBy": "sum"
+          },
+          {
+            "name": "pct_of_feed_class",
+            "dataType": "double",
+            "sourceColumn": "pct_of_feed_class",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          },
+          {
+            "name": "median_gps_offset_s",
+            "dataType": "double",
+            "sourceColumn": "median_gps_offset_s",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          },
+          {
+            "name": "median_gps_dist_m",
+            "dataType": "double",
+            "sourceColumn": "median_gps_dist_m",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          }
+        ],
+        "partitions": [
+          {
+            "name": "mart_gps_validation",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "let",
+                "    Source = PostgreSQL.Database(PgServer, \"warehouse\"),",
+                "    Data = Source{[Schema = \"marts\", Item = \"mart_gps_validation\"]}[Data],",
+                "    Kept = Table.SelectColumns(Data, {\"feed_class\", \"gps_class\", \"arrivals\", \"pct_of_feed_class\", \"median_gps_offset_s\", \"median_gps_dist_m\"})",
+                "in",
+                "    Kept"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "mart_h3_bus_speed",
+        "columns": [
+          {
+            "name": "h3_cell",
+            "dataType": "string",
+            "sourceColumn": "h3_cell",
+            "summarizeBy": "none"
+          },
+          {
+            "name": "gps_fixes",
+            "dataType": "int64",
+            "sourceColumn": "gps_fixes",
+            "summarizeBy": "sum"
+          },
+          {
+            "name": "routes",
+            "dataType": "int64",
+            "sourceColumn": "routes",
+            "summarizeBy": "sum"
+          },
+          {
+            "name": "speed_samples",
+            "dataType": "int64",
+            "sourceColumn": "speed_samples",
+            "summarizeBy": "sum"
+          },
+          {
+            "name": "pct_stopped",
+            "dataType": "double",
+            "sourceColumn": "pct_stopped",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          },
+          {
+            "name": "median_moving_speed_kmh",
+            "dataType": "double",
+            "sourceColumn": "median_moving_speed_kmh",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          },
+          {
+            "name": "peak_median_moving_speed_kmh",
+            "dataType": "double",
+            "sourceColumn": "peak_median_moving_speed_kmh",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          },
+          {
+            "name": "stops_observed",
+            "dataType": "int64",
+            "sourceColumn": "stops_observed",
+            "summarizeBy": "sum"
+          },
+          {
+            "name": "arrivals_observed",
+            "dataType": "int64",
+            "sourceColumn": "arrivals_observed",
+            "summarizeBy": "sum"
+          },
+          {
+            "name": "pct_on_time",
+            "dataType": "double",
+            "sourceColumn": "pct_on_time",
+            "summarizeBy": "sum",
+            "formatString": "0.0"
+          }
+        ],
+        "partitions": [
+          {
+            "name": "mart_h3_bus_speed",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "let",
+                "    Source = PostgreSQL.Database(PgServer, \"warehouse\"),",
+                "    Data = Source{[Schema = \"marts\", Item = \"mart_h3_bus_speed\"]}[Data],",
+                "    Kept = Table.SelectColumns(Data, {\"h3_cell\", \"gps_fixes\", \"routes\", \"speed_samples\", \"pct_stopped\", \"median_moving_speed_kmh\", \"peak_median_moving_speed_kmh\", \"stops_observed\", \"arrivals_observed\", \"pct_on_time\"})",
+                "in",
+                "    Kept"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "_Measures",
+        "columns": [
+          {
+            "name": "Measures",
+            "dataType": "string",
+            "sourceColumn": "Measures",
+            "isHidden": true
+          }
+        ],
+        "partitions": [
+          {
+            "name": "_Measures",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": [
+                "let",
+                "    Source = #table(type table [Measures = text], {})",
+                "in",
+                "    Source"
+              ]
+            }
+          }
+        ],
+        "measures": [
+          {
+            "name": "Arrivals",
+            "expression": "COUNTROWS ( fct_stop_arrival )",
+            "formatString": "#,0"
+          },
+          {
+            "name": "On-time %",
+            "expression": "DIVIDE (\n    CALCULATE ( [Arrivals], fct_stop_arrival[is_on_time] = TRUE () ),\n    [Arrivals]\n)",
+            "formatString": "0.0%;-0.0%;0.0%"
+          },
+          {
+            "name": "Late %",
+            "expression": "DIVIDE ( CALCULATE ( [Arrivals], fct_stop_arrival[is_late] = TRUE () ), [Arrivals] )",
+            "formatString": "0.0%;-0.0%;0.0%"
+          },
+          {
+            "name": "Early %",
+            "expression": "DIVIDE ( CALCULATE ( [Arrivals], fct_stop_arrival[is_early] = TRUE () ), [Arrivals] )",
+            "formatString": "0.0%;-0.0%;0.0%"
+          },
+          {
+            "name": "Median delay (min)",
+            "expression": "MEDIAN ( fct_stop_arrival[delay_min] )",
+            "formatString": "0.0"
+          },
+          {
+            "name": "P90 delay (min)",
+            "expression": "PERCENTILE.INC ( fct_stop_arrival[delay_min], 0.9 )",
+            "formatString": "0.0"
+          },
+          {
+            "name": "On-time % vs network",
+            "expression": "[On-time %] - CALCULATE ( [On-time %], REMOVEFILTERS ( dim_route ) )",
+            "formatString": "0.0%;-0.0%;0.0%"
+          },
+          {
+            "name": "On-time % (7-day)",
+            "expression": "CALCULATE (\n    [On-time %],\n    DATESINPERIOD ( dim_date[date_day], MAX ( dim_date[date_day] ), -7, DAY )\n)",
+            "formatString": "0.0%;-0.0%;0.0%"
+          },
+          {
+            "name": "Routes below 60%",
+            "expression": "COUNTROWS ( FILTER ( VALUES ( dim_route[route_id] ), [On-time %] < 0.6 ) )",
+            "formatString": "0.0%;-0.0%;0.0%"
+          },
+          {
+            "name": "GPS-checked on-time %",
+            "expression": "DIVIDE (\n    CALCULATE ( SUM ( mart_gps_validation[arrivals] ), mart_gps_validation[gps_class] = \"on_time\" ),\n    CALCULATE ( SUM ( mart_gps_validation[arrivals] ), mart_gps_validation[gps_class] <> \"not_confirmed\" )\n)",
+            "formatString": "0.0%;-0.0%;0.0%"
+          },
+          {
+            "name": "GPS confirmed %",
+            "expression": "DIVIDE (\n    CALCULATE ( SUM ( mart_gps_validation[arrivals] ), mart_gps_validation[gps_class] <> \"not_confirmed\" ),\n    SUM ( mart_gps_validation[arrivals] )\n)",
+            "formatString": "0.0%;-0.0%;0.0%"
+          },
+          {
+            "name": "On-time % (routes 300+)",
+            "expression": "IF ( [Arrivals] >= 300, [On-time %] )",
+            "formatString": "0.0%;-0.0%;0.0%"
+          },
+          {
+            "name": "On-time % (stops 50+)",
+            "expression": "IF ( [Arrivals] >= 50, [On-time %] )",
+            "formatString": "0.0%;-0.0%;0.0%"
+          },
+          {
+            "name": "Not on time % (stops 50+)",
+            "expression": "IF ( [Arrivals] >= 50, 1 - [On-time %] )",
+            "formatString": "0.0%;-0.0%;0.0%"
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "name": "fct_stop_arrival_route_id__dim_route_route_id",
+        "fromTable": "fct_stop_arrival",
+        "fromColumn": "route_id",
+        "toTable": "dim_route",
+        "toColumn": "route_id"
+      },
+      {
+        "name": "fct_stop_arrival_stop_id__dim_stop_stop_id",
+        "fromTable": "fct_stop_arrival",
+        "fromColumn": "stop_id",
+        "toTable": "dim_stop",
+        "toColumn": "stop_id"
+      },
+      {
+        "name": "fct_stop_arrival_service_date__dim_date_date_day",
+        "fromTable": "fct_stop_arrival",
+        "fromColumn": "service_date",
+        "toTable": "dim_date",
+        "toColumn": "date_day"
+      },
+      {
+        "name": "dim_stop_tract_geoid__dim_tract_geoid",
+        "fromTable": "dim_stop",
+        "fromColumn": "tract_geoid",
+        "toTable": "dim_tract",
+        "toColumn": "geoid"
+      }
+    ],
+    "expressions": [
+      {
+        "name": "PgServer",
+        "kind": "m",
+        "expression": "\"YOUR-SERVER:5432\" meta [IsParameterQuery=true, Type=\"Text\", IsParameterQueryRequired=true]",
+        "annotations": [
+          {
+            "name": "PBI_ResultType",
+            "value": "Text"
+          }
+        ]
+      }
+    ],
+    "annotations": [
+      {
+        "name": "PBI_QueryOrder",
+        "value": "[\"PgServer\", \"dim_date\", \"dim_route\", \"dim_stop\", \"dim_tract\", \"fct_stop_arrival\", \"mart_route_on_time_daily\", \"mart_on_time_by_hour\", \"mart_tract_service_equity\", \"mart_gps_validation\", \"mart_h3_bus_speed\", \"_Measures\"]"
+      },
+      {
+        "name": "PBIDesktopVersion",
+        "value": "2.160"
+      }
+    ]
+  }
+}
