@@ -4,6 +4,8 @@ The report is built by hand in Power BI Desktop on a Windows PC, against the **m
 **read-only** login. Everything you need is here: connection steps, the model, the measures
 ([measures.dax](measures.dax)) and a color theme ([atl-transit-theme.json](atl-transit-theme.json)).
 
+![Overview page](../../docs/img/powerbi/01-overview.png)
+
 ## Fast path: generate the whole report (report as code)
 
 `build_pbip.py` writes the complete Power BI Project from code: the connection (a `PgServer` parameter), the 10 tables

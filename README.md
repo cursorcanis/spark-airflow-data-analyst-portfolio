@@ -62,11 +62,23 @@ tests/               pytest suite (incl. local-Spark tests)
 ci/                  dbt CI fixtures and known-answer checks
 docker/              Images: Airflow (+dbt venv), Spark (+Delta, S3A, JDBC), Postgres (+PostGIS, H3), RT poller
 web/                 Static web map (MapLibre) + data snapshot
-bi/powerbi/          Power BI build guide, DAX measures, theme
+bi/powerbi/          Power BI report as code (.pbip generator), DAX measures, theme, guide
 scripts/             Operator scripts (map snapshot; ops/ = boot-time self-heal)
 docker-compose.yml   The whole platform
 .env.example         Configuration template (copy to .env)
 ```
+
+## Power BI report
+
+Generated as code by [`bi/powerbi/build_pbip.py`](bi/powerbi/build_pbip.py): a Power BI Project (.pbip) with the
+semantic model (10 marts tables, star relationships, DAX measures from [`measures.dax`](bi/powerbi/measures.dax)) and
+5 pages, refreshed over Tailscale with a read-only `reporting` login. See [`bi/powerbi/README.md`](bi/powerbi/README.md).
+
+| Overview | Stops map |
+|---|---|
+| ![Overview: on-time %, GPS-checked on-time %, arrivals, daily trend, least reliable routes](docs/img/powerbi/01-overview.png) | ![Stops colored by on-time %: the Peachtree Rd corridor stands out in red](docs/img/powerbi/03-stops-map.png) |
+| **Equity** | **GPS check** |
+| ![Census tracts: car-free households vs on-time %](docs/img/powerbi/04-equity.png) | ![Feed verdict vs bus GPS verdict](docs/img/powerbi/05-gps-check.png) |
 
 ## Pipelines
 
