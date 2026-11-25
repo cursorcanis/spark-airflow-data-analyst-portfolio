@@ -28,3 +28,4 @@ bi/**/.pbi/cache.abf
 
 # The web map snapshot IS published (GitHub Pages)
 !web/data/
+*.egg-info/
