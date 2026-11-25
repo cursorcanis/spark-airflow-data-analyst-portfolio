@@ -825,3 +825,41 @@ Live: https://cursorcanis.github.io/spark-airflow-data-analyst-portfolio/ (map) 
 ## Updated 60-second pitch (add)
 
 > "...I didn't trust one feed's definition of an arrival, so I validated it against the other: a Spark range join matches every reported arrival to the bus's GPS track and finds the closest fix to the stop. It showed the feed's times run ahead of the bus, so 'early' is overstated and 'late' understated. I added H3 hexagons in PostGIS to map moving speed, a stop-to-stop model of where buses lose time, and a read-only role for Power BI. CI builds the same Postgres image with H3, tests every model against fixtures with known answers, and publishes a public MapLibre map and the dbt docs to GitHub Pages."
+
+---
+
+# Phase 5: Hardening
+
+## Step 46: Self-heal after a crash or reboot
+
+**What happened.** The server laptop hard-froze three times in three days (2026-11-23 14:36, 11-24 04:04, 11-25 08:54 CET). Each time the logs just stop: no kernel panic, no out-of-memory, normal temperatures, RAM and CPU mostly idle. After every power-on, the stack came back **half-started**: only the 3 containers without published ports were running. The rest sat at `Exited (255)`, and the realtime poller crash-looped (`Could not connect to http://lake:9000`).
+
+**Root cause of the half-started stack** (from `journalctl -u docker -b`): every port is published on `BIND_ADDR`, the Tailscale IP, so nothing is exposed on the home network. At boot, Docker restores containers **before Tailscale has brought that address up**, so each start fails with `failed to bind host port <tailscale-ip>:5432/tcp: cannot assign requested address`. Docker's restart policy only covers containers that *exit*, not ones that *fail to start*, so they are never retried. Starting them again on top of that (plain `docker compose up -d`) also produced containers without working DNS (`UnknownHostException` in Spark). Only a clean `down` and a staged `up` fixed it.
+
+**The fix:** `scripts/ops/recover_stack.sh`, run by a systemd oneshot at every boot.
+1. Wait for the Docker daemon, then wait until `BIND_ADDR` exists on an interface (`ip -o addr show`). It is skipped when BIND_ADDR is 127.0.0.1.
+2. Optionally unload Ollama models (`ATL_UNLOAD_OLLAMA=1`); this laptop also runs a 3.9 GB local LLM.
+3. `docker compose down --remove-orphans` (volumes are kept).
+4. Staged start with `docker compose up -d --wait`: storage (lake, postgres), then Spark, then Airflow and the poller.
+5. Verify: every long-running service is running, and the ones with a healthcheck are healthy. Spark must also resolve its own container name. The script exits non-zero otherwise, so `systemctl` shows the unit as failed.
+
+Install it once, on the server:
+```bash
+sudo scripts/ops/install_recover_service.sh --unload-ollama   # writes /etc/systemd/system/atl-transit-recover.service
+sudo systemctl start atl-transit-recover                      # test it now, without rebooting
+journalctl -u atl-transit-recover -b                          # what it did
+```
+The unit is `Type=oneshot`, `After=docker.service tailscaled.service network-online.target`, runs as your user (in the `docker` group, not root), with `TimeoutStartSec=20min`. You can also run the script by hand at any time; `DRY_RUN=1` prints the commands instead of running them. A manual run went from `down` to all-healthy in **1 min 43 s**.
+
+**Make the freeze itself recover** (machine-level, not in the repo): by default Linux never panics on a lockup, so a hung laptop stays hung until someone presses the power button. That's why each outage cost 8–19 hours of data. Turn lockups into panic → kdump crash dump → automatic reboot after 10 s:
+```bash
+sudo tee /etc/sysctl.d/90-autoreboot.conf >/dev/null <<'CONF'
+kernel.hardlockup_panic = 1
+kernel.softlockup_panic = 1
+kernel.panic = 10
+CONF
+sudo sysctl --system
+```
+With both in place, a freeze that the watchdog detects costs a few minutes instead of a day: reboot, Tailscale up, staged restart, and Airflow catches up the missed hours on its own (`catchup=True` on the hourly DAG). Wi-Fi power saving is also turned off on the server (`nmcli connection modify <wifi> 802-11-wireless.powersave 2`). It's a common trigger of idle hangs on Intel Wi-Fi.
+
+**What's lost and what isn't:** realtime data during an outage is gone for good (MARTA's GTFS-rt has no history API). Everything downstream is rebuilt from what was captured. The dbt source-freshness check flags the gap (`ERROR STALE` on `raw.rt_stop_arrivals` after 12 h) and clears itself once fresh data lands.

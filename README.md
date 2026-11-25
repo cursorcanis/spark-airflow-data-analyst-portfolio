@@ -63,7 +63,7 @@ ci/                  dbt CI fixtures and known-answer checks
 docker/              Images: Airflow (+dbt venv), Spark (+Delta, S3A, JDBC), Postgres (+PostGIS, H3), RT poller
 web/                 Static web map (MapLibre) + data snapshot
 bi/powerbi/          Power BI build guide, DAX measures, theme
-scripts/             Operator scripts (map snapshot)
+scripts/             Operator scripts (map snapshot; ops/ = boot-time self-heal)
 docker-compose.yml   The whole platform
 .env.example         Configuration template (copy to .env)
 ```
@@ -110,7 +110,7 @@ A full step-by-step explanation of how every component is wired together is in [
 - [x] **Phase 2: Spark.** PySpark curation via Spark Connect into Delta Lake (dedupe, typed schemas, observed vs scheduled arrivals, idempotent MERGE), plus Census ACS demographics
 - [x] **Phase 3: Warehouse.** Spark JDBC load with atomic publish; dbt star schema in Postgres/PostGIS (spatial stop-to-tract join, incremental fact, on-time and equity marts), 32 tests + freshness, dbt CI against PostGIS
 - [x] **Phase 4: Geospatial + BI.** GPS validation of the arrival metric (Spark range join), H3 hexagon bus speeds, stop-to-stop delay segments, read-only BI role + Power BI kit, public MapLibre web map and dbt docs on GitHub Pages. (Passenger origin-destination data isn't public for MARTA, so the "flow" view is segment delay.)
-- [ ] **Phase 5: Hardening.** Data-quality suite, Terraform, scheduled operations
+- [ ] **Phase 5: Hardening.** Self-heal after crashes/reboots (systemd + staged restart) ✅, data-quality suite, alerting, Terraform
 - [ ] **Stretch:** streaming ingest (Redpanda/Kafka), natural-language Q&A over the marts (local LLM), Snowflake run of the dbt project
 
 ## Data sources
