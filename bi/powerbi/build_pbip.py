@@ -242,6 +242,20 @@ def visual(vid: str, vtype: str, pos: tuple[int, int, int, int], q: Q | None = N
     return {"x": x, "y": y, "z": z, "width": w, "height": h, "config": json.dumps(config), "filters": "[]"}
 
 
+def gradient_fill(measure: str, low=(0.5, "#c43a3a"), mid=(0.7, "#b5b4ad"), high=(0.85, "#1c5cab"),
+                  null_color: str = "#e3e2dd") -> dict:
+    """Data-driven color (conditional formatting): a 3-stop diverging gradient over a measure."""
+    def stop(value, color):
+        return {"color": {"Literal": {"Value": f"'{color}'"}}, "value": {"Literal": {"Value": f"{value}D"}}}
+    rule = {"linearGradient3": {"min": stop(*low), "mid": stop(*mid), "max": stop(*high),
+                                "nullColoringStrategy": {"strategy": {"Literal": {"Value": "'specificColor'"}},
+                                                         "color": {"Literal": {"Value": f"'{null_color}'"}}}}}
+    fill = {"FillRule": {"Input": {"Measure": {"Expression": {"SourceRef": {"Entity": "_Measures"}},
+                                               "Property": measure}}, "FillRule": rule}}
+    return {"properties": {"fill": {"solid": {"color": {"expr": fill}}}},
+            "selector": {"data": [{"dataViewWildcard": {"matchingOption": 1}}]}}
+
+
 def textbox(vid: str, pos, text: str, size: int = 12, bold: bool = False) -> dict:
     style = {"fontSize": f"{size}pt"}
     if bold:
@@ -288,8 +302,10 @@ def pages() -> list[tuple[str, list[dict]]]:
         visual("st_map", "map", (24, 64, 700, 636),
                Q().col("Category", "dim_stop", "stop_name").col("Y", "dim_stop", "stop_lat", agg=1)
                .col("X", "dim_stop", "stop_lon", agg=1).measure("Size", "Arrivals")
-               .measure("Tooltips", "On-time %"),
-               "Observed stops (size = arrivals)"),
+               .measure("Tooltips", "On-time % (stops 50+)"),
+               "Stops colored by on-time % (red < 50%, gray 70%, blue 85%+; light gray = under 50 arrivals)",
+               objects={"bubbles": [{"properties": {"bubbleSize": {"expr": {"Literal": {"Value": "-8L"}}}}}],
+                        "dataPoint": [gradient_fill("On-time % (stops 50+)")]}),
         visual("st_table", "tableEx", (740, 64, 516, 636),
                Q().col("Values", "dim_stop", "stop_name").measure("Values", "Arrivals")
                .measure("Values", "On-time % (stops 50+)").measure("Values", "Not on time % (stops 50+)", sort="desc"),
@@ -356,11 +372,15 @@ def report_json() -> dict:
 # ------------------------------------------------------------------ write the project
 def write(out: Path, server: str) -> Path:
     model_dir, report_dir = out / f"{NAME}.SemanticModel", out / f"{NAME}.Report"
+    # Replace everything we generate, but keep Power BI's local state (.pbi: loaded data cache, settings;
+    # .platform: item ids), so a regenerated copy opens with its data instead of needing a refresh.
+    keep = {".pbi", ".platform"}
     for d in (model_dir, report_dir):
-        if d.exists():
-            shutil.rmtree(d)
-    (report_dir / "StaticResources" / "RegisteredResources").mkdir(parents=True)
-    model_dir.mkdir(parents=True)
+        for child in d.iterdir() if d.exists() else []:
+            if child.name not in keep:
+                shutil.rmtree(child) if child.is_dir() else child.unlink()
+    (report_dir / "StaticResources" / "RegisteredResources").mkdir(parents=True, exist_ok=True)
+    model_dir.mkdir(parents=True, exist_ok=True)
 
     measures = parse_measures((HERE / "measures.dax").read_text(encoding="utf-8"))
     dump = lambda p, obj: p.write_text(json.dumps(obj, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")  # noqa: E731
