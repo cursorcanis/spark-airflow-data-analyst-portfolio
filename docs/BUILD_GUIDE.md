@@ -863,3 +863,29 @@ sudo sysctl --system
 With both in place, a freeze that the watchdog detects costs a few minutes instead of a day: reboot, Tailscale up, staged restart, and Airflow catches up the missed hours on its own (`catchup=True` on the hourly DAG). Wi-Fi power saving is also turned off on the server (`nmcli connection modify <wifi> 802-11-wireless.powersave 2`). It's a common trigger of idle hangs on Intel Wi-Fi.
 
 **What's lost and what isn't:** realtime data during an outage is gone for good (MARTA's GTFS-rt has no history API). Everything downstream is rebuilt from what was captured. The dbt source-freshness check flags the gap (`ERROR STALE` on `raw.rt_stop_arrivals` after 12 h) and clears itself once fresh data lands.
+
+## Step 47: "No new data" alert (off-box dead man's switch)
+
+**The problem it solves:** in the three outages above, nobody knew until the next day. And an alert can't come *from* the laptop: if it's frozen or offline, it can't send anything. The overnight internet drops (2026-11-23 and 11-25, roughly 00:15–07:00 CET) were also only found later, from empty hours in the lake.
+
+**Pattern: dead man's switch (heartbeat monitoring).** The stack checks itself every 15 minutes and *pings* an external service (healthchecks.io, free tier) when everything is fresh. The external service alerts you (email by default) when:
+- a ping says **fail** (the check ran and found a problem), or
+- **no ping arrives** within period + grace (laptop frozen, internet down, Docker or Airflow dead).
+
+**What is checked** (`src/atl_transit/heartbeat.py`, pure Python, unit-tested in `tests/test_heartbeat.py`):
+| Signal | Source | Limit | What it catches |
+|---|---|---|---|
+| Newest raw snapshot | feed timestamp in the newest `gtfs_rt/feed=vehicle_positions/...` key (current + previous hour only, cheap to list) | 15 min | poller down, internet down, MARTA feed down |
+| Newest compacted hour | `gtfs_rt_parquet/_manifests/date=.../hour=HH.json` | 3 h | Airflow scheduling / compaction stuck |
+
+MARTA's feed updates every ~30 s around the clock (about 118 snapshots per hour even at night), so one threshold works 24/7.
+
+**The DAG** `airflow/dags/pipeline_heartbeat.py`: schedule `*/15 * * * *`, `catchup=False` (a heartbeat about the past is meaningless), `max_active_runs=1`, no retries. It POSTs a short summary to `HEALTHCHECK_PING_URL`, or to `<url>/fail` with the reason. Then it raises on problems, so Airflow shows a red run too. Without a URL it still runs and fails visibly in Airflow.
+
+**Set up the external check** (once):
+1. Create a free account at https://healthchecks.io → **Add Check**.
+2. Schedule: **Simple**, Period **15 minutes**, Grace **30 minutes**. So you hear within ~45 min of the last good ping.
+3. Integrations: email is on by default. A phone push app (ntfy, Telegram, Pushover, Discord...) is optional.
+4. Copy the ping URL (`https://hc-ping.com/<uuid>`). Treat it as a secret: anyone with it can mark your check up or down.
+5. On the server: add `HEALTHCHECK_PING_URL=https://hc-ping.com/<uuid>` to `.env`, then `docker compose up -d` (recreates the Airflow containers with the new variable) and unpause the DAG: `docker compose exec airflow-scheduler airflow dags unpause pipeline_heartbeat`.
+6. Test: trigger the DAG once (`airflow dags trigger pipeline_heartbeat`). The check turns green on the website and the ping log shows the summary text. To test the alert, `docker compose stop rt-poller` for 20 min (or pause the DAG for 45 min), then start it again.

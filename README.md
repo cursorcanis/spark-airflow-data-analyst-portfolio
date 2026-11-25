@@ -76,6 +76,7 @@ docker-compose.yml   The whole platform
 | `rt-poller` (service) | every 30 s / 120 s | Polls GTFS-realtime vehicle positions and trip updates into the raw zone |
 | `gtfs_rt_hourly` | hourly | Compacts each hour's snapshots into Parquet (dynamic task mapping) |
 | `lake_housekeeping` | daily | Raw-zone retention |
+| `pipeline_heartbeat` | every 15 min | Data-freshness check; pings an external dead man's switch (alerts if data stops or the server goes silent) |
 | `census_tracts_reference` | manual | Census tracts (TIGERweb) and ACS demographics into PostGIS |
 | `spark_curate_gtfs_static` / `spark_curate_rt` | data-aware (Assets) | Spark Connect → Delta Lake: typed tables, deduped GPS, observed vs scheduled arrivals (idempotent MERGE) |
 | `warehouse_load_gtfs_static` / `warehouse_load_rt` | data-aware | Spark JDBC → load table → one-transaction publish into Postgres |
@@ -110,7 +111,7 @@ A full step-by-step explanation of how every component is wired together is in [
 - [x] **Phase 2: Spark.** PySpark curation via Spark Connect into Delta Lake (dedupe, typed schemas, observed vs scheduled arrivals, idempotent MERGE), plus Census ACS demographics
 - [x] **Phase 3: Warehouse.** Spark JDBC load with atomic publish; dbt star schema in Postgres/PostGIS (spatial stop-to-tract join, incremental fact, on-time and equity marts), 32 tests + freshness, dbt CI against PostGIS
 - [x] **Phase 4: Geospatial + BI.** GPS validation of the arrival metric (Spark range join), H3 hexagon bus speeds, stop-to-stop delay segments, read-only BI role + Power BI kit, public MapLibre web map and dbt docs on GitHub Pages. (Passenger origin-destination data isn't public for MARTA, so the "flow" view is segment delay.)
-- [ ] **Phase 5: Hardening.** Self-heal after crashes/reboots (systemd + staged restart) ✅, data-quality suite, alerting, Terraform
+- [ ] **Phase 5: Hardening.** Self-heal after crashes/reboots (systemd + staged restart) ✅, "no new data" alert via an off-box dead man's switch ✅, data-quality suite, Terraform
 - [ ] **Stretch:** streaming ingest (Redpanda/Kafka), natural-language Q&A over the marts (local LLM), Snowflake run of the dbt project
 
 ## Data sources

@@ -40,6 +40,7 @@ x-airflow-common: &airflow-common
     DBT_PG_PASSWORD: ${WAREHOUSE_DB_PASSWORD}
     DBT_PG_DBNAME: warehouse
     CENSUS_API_KEY: ${CENSUS_API_KEY:-}   # optional; ACS demographics are skipped without it
+    HEALTHCHECK_PING_URL: ${HEALTHCHECK_PING_URL:-}   # optional; off-box dead man's switch (pipeline_heartbeat DAG)
   volumes:
     - ./airflow/dags:/opt/airflow/dags:ro
     - ./src:/opt/airflow/src:ro
