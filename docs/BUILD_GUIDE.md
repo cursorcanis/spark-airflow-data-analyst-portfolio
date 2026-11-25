@@ -884,8 +884,24 @@ MARTA's feed updates every ~30 s around the clock (about 118 snapshots per hour 
 
 **Set up the external check** (once):
 1. Create a free account at https://healthchecks.io → **Add Check**.
-2. Schedule: **Simple**, Period **15 minutes**, Grace **30 minutes**. So you hear within ~45 min of the last good ping.
+2. Schedule: **Cron** `*/15 7-23 * * *` in your server's time zone, Grace **30 minutes**, so it expects a ping every 15 min except during the nightly offline window (Step 48). Without an offline window, use **Simple**, Period 15 min. Either way you hear within ~45 min of the last good ping.
 3. Integrations: email is on by default. A phone push app (ntfy, Telegram, Pushover, Discord...) is optional.
 4. Copy the ping URL (`https://hc-ping.com/<uuid>`). Treat it as a secret: anyone with it can mark your check up or down.
 5. On the server: add `HEALTHCHECK_PING_URL=https://hc-ping.com/<uuid>` to `.env`, then `docker compose up -d` (recreates the Airflow containers with the new variable) and unpause the DAG: `docker compose exec airflow-scheduler airflow dags unpause pipeline_heartbeat`.
 6. Test: trigger the DAG once (`airflow dags trigger pipeline_heartbeat`). The check turns green on the website and the ping log shows the summary text. To test the alert, `docker compose stop rt-poller` for 20 min (or pause the DAG for 45 min), then start it again.
+
+## Step 48: A known nightly offline window
+
+**Finding:** the empty hours in the lake on 2026-11-23 and 11-25 (about 00:15–07:00 local time) weren't outages: the home internet is off at night. Polling MARTA then only produces errors, and the heartbeat would page you every night for something expected. That's the classic way to train people to ignore alerts.
+
+**Change:** one shared definition of the window, `src/atl_transit/offline_window.py`, configured in `.env`:
+```
+OFFLINE_WINDOW=00:00-07:00      # local start-end; may wrap midnight (23:30-06:00); empty = always online
+OFFLINE_WINDOW_TZ=Europe/Rome   # the server's local time zone
+```
+- **Poller:** inside the window it doesn't call MARTA, but keeps writing its health file, so Docker still sees it as healthy and the self-heal script doesn't "repair" a sleeping service. It logs `offline_window_start` / `offline_window_end` once each, and polls every feed immediately when the window ends.
+- **Heartbeat DAG:** skipped inside the window plus 15 minutes (time for fresh data to land), with no check and no ping.
+- **External monitor:** a matching cron schedule (`*/15 7-23 * * *`, same time zone), so healthchecks.io doesn't expect pings at night.
+- Unit tests cover local time zones, windows that wrap midnight, the grace period and the poller resuming at once (`tests/test_offline_window.py`).
+
+**What it costs:** the window is 18:00–01:00 Atlanta time (Atlanta is 6 h behind Central Europe), so the **evening service is never observed**. That's a known sampling bias: on-time and speed numbers describe 01:00–18:00 Atlanta time. It's documented on the map and in the results, rather than hidden.

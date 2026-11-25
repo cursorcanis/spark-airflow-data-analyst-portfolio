@@ -41,6 +41,8 @@ x-airflow-common: &airflow-common
     DBT_PG_DBNAME: warehouse
     CENSUS_API_KEY: ${CENSUS_API_KEY:-}   # optional; ACS demographics are skipped without it
     HEALTHCHECK_PING_URL: ${HEALTHCHECK_PING_URL:-}   # optional; off-box dead man's switch (pipeline_heartbeat DAG)
+    OFFLINE_WINDOW: ${OFFLINE_WINDOW:-}           # optional daily no-internet window, e.g. 00:00-07:00
+    OFFLINE_WINDOW_TZ: ${OFFLINE_WINDOW_TZ:-UTC}
   volumes:
     - ./airflow/dags:/opt/airflow/dags:ro
     - ./src:/opt/airflow/src:ro
@@ -112,7 +114,7 @@ services:
     build:
       context: .
       dockerfile: docker/poller/Dockerfile
-    image: atl-transit/rt-poller:0.1.0
+    image: atl-transit/rt-poller:0.1.1
     environment:
       LAKE_ENDPOINT_URL: http://lake:9000
       LAKE_ACCESS_KEY: ${LAKE_ACCESS_KEY}
@@ -120,6 +122,8 @@ services:
       LAKE_RAW_BUCKET: raw
       POLL_VEHICLE_POSITIONS_S: ${POLL_VEHICLE_POSITIONS_S:-30}
       POLL_TRIP_UPDATES_S: ${POLL_TRIP_UPDATES_S:-120}
+      OFFLINE_WINDOW: ${OFFLINE_WINDOW:-}
+      OFFLINE_WINDOW_TZ: ${OFFLINE_WINDOW_TZ:-UTC}
     depends_on:
       lake:
         condition: service_started
