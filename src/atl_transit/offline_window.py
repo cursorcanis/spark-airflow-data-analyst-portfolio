@@ -48,7 +48,9 @@ class OfflineWindow:
 
     def fraction_of(self, start: datetime, end: datetime) -> float:
         """Share of [start, end) inside the window, sampled per minute (exact for windows on minute boundaries)."""
-        minutes = int((end - start) / timedelta(minutes=1))
+        # total_seconds() works for stdlib datetimes AND Airflow's pendulum DateTimes (their difference is a
+        # pendulum Interval, which can't be divided by a timedelta)
+        minutes = int((end - start).total_seconds() // 60)
         if minutes <= 0:
             return 0.0
         inside = sum(self.contains(start + timedelta(minutes=m)) for m in range(minutes))
