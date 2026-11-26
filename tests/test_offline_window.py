@@ -67,3 +67,11 @@ def test_poller_without_window_is_never_offline(tmp_path: Path):
     p = Poller(s3=None, bucket="raw", intervals={"vehicle_positions": 30}, heartbeat=tmp_path / "hb",
                session=type("S", (), {"headers": {}})())
     assert p.offline_now(at_utc(1, 0)) is False
+
+
+def test_fraction_of_an_hour_inside_the_window():
+    w = OfflineWindow.parse("00:00-07:00", ROME)
+    assert w.fraction_of(at_utc(23, 0), at_utc(23, 0) + timedelta(hours=1)) == 1.0   # 00:00-01:00 Rome
+    assert w.fraction_of(at_utc(6, 0), at_utc(7, 0)) == 0.0                           # 07:00-08:00 Rome
+    w2 = OfflineWindow.parse("00:30-07:00", ROME)
+    assert w2.fraction_of(at_utc(23, 0), at_utc(23, 0) + timedelta(hours=1)) == 0.5

@@ -46,6 +46,14 @@ class OfflineWindow:
             return True
         return grace_after > timedelta(0) and self._inside((local - grace_after).time())
 
+    def fraction_of(self, start: datetime, end: datetime) -> float:
+        """Share of [start, end) inside the window, sampled per minute (exact for windows on minute boundaries)."""
+        minutes = int((end - start) / timedelta(minutes=1))
+        if minutes <= 0:
+            return 0.0
+        inside = sum(self.contains(start + timedelta(minutes=m)) for m in range(minutes))
+        return inside / minutes
+
     def _inside(self, t: time) -> bool:
         if self.start < self.end:
             return self.start <= t < self.end

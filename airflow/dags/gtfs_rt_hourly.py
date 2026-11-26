@@ -7,6 +7,8 @@ Each hourly run (data interval = that UTC hour) does, per feed (dynamic task map
     s3://raw/gtfs_rt_parquet/feed=<feed>/date=YYYY-MM-DD/hour=HH/part-000.parquet
 then checks completeness (snapshot count vs. expected) and writes an hourly manifest.
 catchup=True: if the server was off, missed hours are compacted automatically when it returns.
+Hours inside the known nightly OFFLINE_WINDOW (no internet) are recorded as expected-empty instead of failing;
+a real outage (no snapshots when data was expected) still fails the run.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ from lake_assets import RAW_RT_PARQUET
 from atl_transit.gtfs_rt import (
     FLATTENERS,
     SCHEMAS,
+    assess_capture,
     feed_ts_from_key,
     hour_partition,
     manifest_key,
@@ -35,6 +38,7 @@ from atl_transit.gtfs_rt import (
     snapshot_prefix,
     to_table,
 )
+from atl_transit.offline_window import OfflineWindow
 
 LAKE_CONN_ID = "lake_s3"
 RAW_BUCKET = os.environ.get("LAKE_RAW_BUCKET", "raw")
@@ -100,20 +104,17 @@ def gtfs_rt_hourly():
     @task(outlets=[RAW_RT_PARQUET])  # success -> triggers spark_curate_rt
     def check_and_record(results: list[dict], data_interval_start=None) -> dict:
         results = [dict(r) for r in results]  # mapped XComs arrive as a lazy sequence; materialize them
-        problems = []
-        for r in results:
-            expected = 3600 / EXPECTED_INTERVAL_S[r["feed"]]
-            r["completeness"] = round(r["snapshots"] / expected, 3)
-            if r["snapshots"] == 0:
-                problems.append(f"{r['feed']}: no snapshots (is rt-poller running?)")
-            elif r["completeness"] < MIN_COMPLETENESS:
-                problems.append(f"{r['feed']}: only {r['snapshots']} of ~{expected:.0f} snapshots")
+        offline = OfflineWindow.from_env()
+        offline_fraction = (offline.fraction_of(data_interval_start, data_interval_start + timedelta(hours=1))
+                            if offline else 0.0)
+        results, problems, fatal = assess_capture(results, EXPECTED_INTERVAL_S, offline_fraction, MIN_COMPLETENESS)
 
-        manifest = {"hour_utc": hour_partition(data_interval_start), "feeds": results, "problems": problems}
+        manifest = {"hour_utc": hour_partition(data_interval_start), "feeds": results, "problems": problems,
+                    "offline_fraction": round(offline_fraction, 3)}
         S3Hook(aws_conn_id=LAKE_CONN_ID).load_string(
             json.dumps(manifest, indent=2), manifest_key(data_interval_start), RAW_BUCKET, replace=True
         )
-        if any("no snapshots" in p for p in problems):
+        if fatal:
             raise ValueError("; ".join(problems))  # fail loudly: capture is down
         for p in problems:
             print(f"WARNING: {p}")  # partial gaps are logged and recorded, not fatal

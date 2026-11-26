@@ -221,3 +221,30 @@ FLATTENERS = {"vehicle_positions": flatten_vehicle_positions, "trip_updates": fl
 
 def to_table(feed: str, rows: list[dict]) -> pa.Table:
     return pa.Table.from_pylist(rows, schema=SCHEMAS[feed])
+
+
+# ---------------------------------------------------------------- capture completeness
+def assess_capture(results: list[dict], expected_interval_s: dict[str, int], offline_fraction: float = 0.0,
+                   min_completeness: float = 0.8) -> tuple[list[dict], list[str], bool]:
+    """Score one compacted hour. Returns (results with completeness, problems, fatal).
+
+    offline_fraction = share of the hour inside the known offline window (no internet expected). The expected
+    snapshot count shrinks accordingly; an hour that is entirely offline is recorded, not failed. Zero snapshots
+    when data WAS expected is fatal (capture is down); a partial gap is only a warning.
+    """
+    scored, problems = [], []
+    online_share = max(0.0, 1.0 - offline_fraction)
+    for r in results:
+        r = dict(r)
+        expected = 3600 / expected_interval_s[r["feed"]] * online_share
+        r["expected_snapshots"] = round(expected, 1)
+        r["completeness"] = round(r["snapshots"] / expected, 3) if expected >= 1 else None
+        if expected < 1:
+            pass  # fully inside the offline window: nothing was expected
+        elif r["snapshots"] == 0:
+            problems.append(f"{r['feed']}: no snapshots (is rt-poller running?)")
+        elif r["completeness"] < min_completeness:
+            problems.append(f"{r['feed']}: only {r['snapshots']} of ~{expected:.0f} snapshots")
+        scored.append(r)
+    fatal = any("no snapshots" in p for p in problems)
+    return scored, problems, fatal

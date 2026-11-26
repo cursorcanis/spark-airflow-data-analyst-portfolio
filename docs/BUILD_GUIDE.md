@@ -909,5 +909,6 @@ OFFLINE_WINDOW_TZ=Europe/Rome   # the server's local time zone
 - **Heartbeat DAG:** skipped inside the window plus 15 minutes (time for fresh data to land), with no check and no ping.
 - **External monitor:** a matching cron schedule (`*/15 7-23 * * *`, same time zone), so healthchecks.io doesn't expect pings at night.
 - Unit tests cover local time zones, windows that wrap midnight, the grace period and the poller resuming at once (`tests/test_offline_window.py`).
+- **Hourly compaction** (added after the first night): `gtfs_rt_hourly` used to *fail* every hour with zero snapshots, so the window produced 7 red runs a night. It now computes the share of the hour inside the window (`OfflineWindow.fraction_of`) and scales the expected snapshot count. A fully offline hour is recorded in its manifest (`offline_fraction: 1.0`, completeness `null`) and succeeds, while zero snapshots when data *was* expected still fails loudly. The scoring is a pure function, `assess_capture` in `gtfs_rt.py`, unit-tested for full, outage, offline and half-offline hours.
 
 **What it costs:** the window is 18:00–01:00 Atlanta time (Atlanta is 6 h behind Central Europe), so the **evening service is never observed**. That's a known sampling bias: on-time and speed numbers describe 01:00–18:00 Atlanta time. It's documented on the map and in the results, rather than hidden.

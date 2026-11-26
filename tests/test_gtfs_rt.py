@@ -126,3 +126,34 @@ def test_poller_skips_unchanged_snapshots(tmp_path):
     assert list(s3.objects) == [snapshot_key("vehicle_positions", FEED_TS)]
     assert parse_feed(next(iter(s3.objects.values()))).header.timestamp == FEED_TS
     assert "atl-transit-pipeline" in session.headers["User-Agent"]
+
+
+INTERVALS = {"vehicle_positions": 30, "trip_updates": 120}
+
+
+def _hour(vp: int, tu: int) -> list[dict]:
+    return [{"feed": "vehicle_positions", "snapshots": vp}, {"feed": "trip_updates", "snapshots": tu}]
+
+
+def test_assess_capture_full_hour_ok():
+    from atl_transit.gtfs_rt import assess_capture
+    scored, problems, fatal = assess_capture(_hour(118, 30), INTERVALS)
+    assert not problems and not fatal and scored[0]["completeness"] == 0.983
+
+
+def test_assess_capture_outage_is_fatal():
+    from atl_transit.gtfs_rt import assess_capture
+    _, problems, fatal = assess_capture(_hour(0, 0), INTERVALS)
+    assert fatal and len(problems) == 2
+
+
+def test_assess_capture_offline_window_hour_is_expected_empty():
+    from atl_transit.gtfs_rt import assess_capture
+    scored, problems, fatal = assess_capture(_hour(0, 0), INTERVALS, offline_fraction=1.0)
+    assert not problems and not fatal and scored[0]["completeness"] is None
+
+
+def test_assess_capture_partly_offline_hour_scales_expectation():
+    from atl_transit.gtfs_rt import assess_capture
+    scored, problems, fatal = assess_capture(_hour(58, 15), INTERVALS, offline_fraction=0.5)
+    assert not problems and not fatal and scored[0]["expected_snapshots"] == 60.0
