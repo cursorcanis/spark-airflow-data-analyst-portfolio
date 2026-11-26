@@ -912,3 +912,49 @@ OFFLINE_WINDOW_TZ=Europe/Rome   # the server's local time zone
 - **Hourly compaction** (added after the first night): `gtfs_rt_hourly` used to *fail* every hour with zero snapshots, so the window produced 7 red runs a night. It now computes the share of the hour inside the window (`OfflineWindow.fraction_of`) and scales the expected snapshot count. A fully offline hour is recorded in its manifest (`offline_fraction: 1.0`, completeness `null`) and succeeds, while zero snapshots when data *was* expected still fails loudly. The scoring is a pure function, `assess_capture` in `gtfs_rt.py`, unit-tested for full, outage, offline and half-offline hours.
 
 **What it costs:** the window is 18:00–01:00 Atlanta time (Atlanta is 6 h behind Central Europe), so the **evening service is never observed**. That's a known sampling bias: on-time and speed numbers describe 01:00–18:00 Atlanta time. It's documented on the map and in the results, rather than hidden.
+
+## Step 49: Bug fix: "local hour" was 10 hours off (time zones in Postgres)
+
+**Symptom.** Exploring the data, the "night, 00–05" band held 102K of 216K arrivals, almost half. MARTA runs very few buses at night, so that can't be right. A sample row confirmed it: an arrival scheduled at `19:00 UTC` (14:00 in Atlanta) had `scheduled_hour_local = 0`.
+
+**Affected:** `fct_stop_arrival.scheduled_hour_local` (the Power BI "Time of day" page, `mart_on_time_by_hour`), and `fct_vehicle_ping.event_hour_local` + `is_weekday_peak` (the "weekday peak" speed in `mart_h3_bus_speed` and the web map tooltips). On-time %, delays, routes, stops and GPS checks were **not** affected: they never use the local hour.
+
+**Root cause: `AT TIME ZONE` means two opposite things.**
+| Input type | `x AT TIME ZONE 'America/New_York'` returns | Meaning |
+|---|---|---|
+| `timestamptz` (an instant) | `timestamp` | "What does a clock in New York show at this instant?" (what we wanted) |
+| `timestamp` (a clock reading, no zone) | `timestamptz` | "Treat this reading *as* New York time: which instant is it?" (what we got) |
+
+Staging stores UTC as `timestamp` without time zone (`raw_ts AT TIME ZONE 'UTC'` on a `timestamptz` raw column). The marts then applied `AT TIME ZONE 'America/New_York'` to that plain timestamp, so Postgres used the **second** meaning: it took 19:00 as a New York clock reading and returned the instant 00:00 UTC the next day. That moves +5 h instead of −5 h, so the result was 10 hours off.
+
+Run on the production database:
+| Case | UTC value | Old (wrong) | Fixed | Expected |
+|---|---|---|---|---|
+| Winter (EST, UTC−5) | 2026-11-26 19:00 | 2026-11-27 00:00+00 | 2026-11-26 14:00 | 14:00 |
+| Summer (EDT, UTC−4) | 2026-07-01 12:00 | 2026-07-01 16:00+00 | 2026-07-01 08:00 | 08:00 |
+| Crosses midnight | 2026-11-27 03:30 | 2026-11-27 08:30+00 | 2026-11-26 22:30 | previous day 22:30 |
+
+**Why CI didn't catch it.** CI had a test for exactly this (`13:00 UTC = 08 EST`) and it passed. The CI fixture declared the raw columns as plain `timestamp`, while production uses `timestamptz`. Staging's `AT TIME ZONE 'UTC'` therefore *added* a zone in CI and *removed* one in production. The same SQL produced different column types, and the mart's conversion happened to be correct for CI's type and wrong for production's. **Lesson: test fixtures must match production types exactly, not just values.**
+
+**The fix (commit `6c1dce6`):**
+1. **One macro** `dbt/macros/to_local_time.sql`: `((ts AT TIME ZONE 'UTC') AT TIME ZONE '{{ var("local_timezone") }}')`. Step 1 states "this reading is UTC" and returns the instant (`timestamptz`). Step 2 asks "what does Atlanta's clock show at that instant?" and returns a `timestamp`. The tz database picks EST or EDT per date, so daylight saving is handled.
+2. **Use it everywhere** a local hour is derived: `fct_stop_arrival` (1 place) and `fct_vehicle_ping` (3 places). The zone is a project variable (`local_timezone: America/New_York`), not a string repeated in each model.
+3. **A singular dbt test** `dbt/tests/assert_local_time_conversion.sql` pins the macro to the three known answers above. It runs on every `dbt build`, in production and in CI.
+4. **CI fixtures now use `timestamptz`** like production (`ci/seed_warehouse.sql`), plus a new assert that the fixture GPS fix (13:01 UTC on a Monday) is hour 8 and a weekday peak.
+
+**Deploying it (the manual procedure):**
+```bash
+git pull                                                     # on the server
+docker compose exec airflow-scheduler airflow dags pause dbt_build    # no scheduled run in parallel
+docker compose exec -e DBT_PROFILES_DIR=/opt/airflow/dbt -e DBT_PROJECT_DIR=/opt/airflow/dbt \
+  -e DBT_TARGET_PATH=/tmp/dbt/target -e DBT_LOG_PATH=/tmp/dbt/logs airflow-scheduler \
+  /home/airflow/dbt-venv/bin/dbt build --target prod --full-refresh \
+  --select fct_stop_arrival+ fct_vehicle_ping+ assert_local_time_conversion
+docker compose exec airflow-scheduler airflow dags unpause dbt_build
+```
+- `--full-refresh` matters: both facts are **incremental** and normally rebuild only the last few days, so without it the old days would keep the wrong hours.
+- `model+` also rebuilds everything downstream (marts on time by hour, H3 speeds and so on).
+- Result: 29/29 models and tests passed, and 505K GPS fixes were rebuilt.
+- Then refresh Power BI (**Refresh → Schema and data**) and the web map snapshot (`scripts/refresh_webmap_data.sh`).
+
+**Corrected finding:** on-time is best in the early morning (74–76% at 4–6 AM) and worst in the afternoon rush (**52% at 4 PM**, about 24% late), recovering to 65–67% in the evening.

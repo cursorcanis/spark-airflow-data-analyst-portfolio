@@ -77,6 +77,8 @@ semantic model (10 marts tables, star relationships, DAX measures from [`measure
 | Overview | Stops map |
 |---|---|
 | ![Overview: on-time %, GPS-checked on-time %, arrivals, daily trend, least reliable routes](docs/img/powerbi/01-overview.png) | ![Stops colored by on-time %: the Peachtree Rd corridor stands out in red](docs/img/powerbi/03-stops-map.png) |
+| **Time of day** | |
+| ![On-time % by scheduled hour in Atlanta time: best early morning, lowest in the 4 PM rush](docs/img/powerbi/02-time-of-day.png) | |
 | **Equity** | **GPS check** |
 | ![Census tracts: car-free households vs on-time %](docs/img/powerbi/04-equity.png) | ![Feed verdict vs bus GPS verdict](docs/img/powerbi/05-gps-check.png) |
 

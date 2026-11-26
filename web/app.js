@@ -23,7 +23,7 @@ const LAYERS = {
       items: [["under 20", BLUE[4]], ["20 – 25", BLUE[3]], ["25 – 32", BLUE[2]], ["32 – 40", BLUE[1]], ["40 or more", BLUE[0]]] },
     paint: { "fill-color": step("speed_kmh", [20, 25, 32, 40], [BLUE[4], BLUE[3], BLUE[2], BLUE[1], BLUE[0]]),
              "fill-opacity": 0.72, "fill-outline-color": "rgba(255,255,255,0.6)" },
-    finding: () => "Each hexagon is about 0.7 km² (H3 resolution 8). Within 5 km of Downtown/Midtown buses average about 24 km/h while moving, vs 35 km/h in the rest of the region. Time spent stopped (stops, signals, layovers) is left out of the speed and shown as “% stopped” in the tooltip.",
+    finding: () => "Each hexagon is about 0.7 km² (H3 resolution 8). Within 5 km of Downtown/Midtown buses average about 23 km/h while moving, vs 33 km/h in the rest of the region. Time spent stopped (stops, signals, layovers) is left out of the speed and shown as “% stopped” in the tooltip.",
     tip: (p) => `<b>H3 ${p.h3}</b><br><span class="k">Median moving speed</span> ${fmt(p.speed_kmh, 1)} km/h
       <br><span class="k">Weekday peak</span> ${fmt(p.peak_speed_kmh, 1)} km/h<br><span class="k">Stopped</span> ${pct(p.pct_stopped)} of GPS samples
       <br><span class="k">Routes</span> ${p.routes} · <span class="k">stops</span> ${p.stops}<br><span class="k">On time at stops here</span> ${pct(p.pct_on_time)}`,
