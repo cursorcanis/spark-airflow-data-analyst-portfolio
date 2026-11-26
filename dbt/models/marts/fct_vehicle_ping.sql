@@ -19,9 +19,10 @@ select
     longitude,
     calc_speed_kmh,
     calc_speed_kmh < {{ var('moving_speed_min_kmh') }} as is_stopped,
-    extract(hour from event_at at time zone 'America/New_York')::int as event_hour_local,
-    (extract(isodow from event_at at time zone 'America/New_York') < 6
-     and extract(hour from event_at at time zone 'America/New_York')::int in ({{ var('peak_hours_local') | join(', ') }}))
+    -- event_at is UTC without a time zone: convert via the macro (see macros/to_local_time.sql)
+    extract(hour from {{ to_local_time('event_at') }})::int as event_hour_local,
+    (extract(isodow from {{ to_local_time('event_at') }}) < 6
+     and extract(hour from {{ to_local_time('event_at') }})::int in ({{ var('peak_hours_local') | join(', ') }}))
         as is_weekday_peak,
     h3_cell::text as h3_cell
 from {{ ref('stg_rt__vehicle_pings') }}

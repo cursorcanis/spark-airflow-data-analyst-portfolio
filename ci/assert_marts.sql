@@ -14,6 +14,11 @@ SELECT 1 / (CASE WHEN (SELECT pct_households_no_vehicle FROM marts.dim_tract) = 
 -- scheduled hour in Atlanta local time: 13:00 UTC = 08 EST
 SELECT 1 / (CASE WHEN (SELECT scheduled_hour_local FROM marts.fct_stop_arrival WHERE trip_id='T1' AND stop_sequence=1) = 8
             THEN 1 ELSE 0 END) AS local_hour_ok;
+-- same for GPS fixes: 13:01 UTC on Monday 2026-11-23 = 08:01 EST -> hour 8, a weekday peak hour.
+-- (The fixture's raw timestamps are timestamptz, exactly like production; the 2026-11-26 local-hour bug
+--  passed CI because the fixture used plain timestamp and staging then produced a different column type.)
+SELECT 1 / (CASE WHEN (SELECT bool_and(event_hour_local = 8 AND is_weekday_peak) FROM marts.fct_vehicle_ping)
+            THEN 1 ELSE 0 END) AS ping_local_hour_ok;
 -- GPS validation: the feed's "early" arrival is on time by GPS; the late one has no GPS confirmation
 SELECT 1 / (CASE WHEN (SELECT arrivals FROM marts.mart_gps_validation WHERE feed_class = 'early' AND gps_class = 'on_time') = 1
                   AND (SELECT arrivals FROM marts.mart_gps_validation WHERE feed_class = 'late' AND gps_class = 'not_confirmed') = 1

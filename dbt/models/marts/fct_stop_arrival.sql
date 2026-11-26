@@ -29,7 +29,8 @@ select
     a.observed_arrival_at,
     a.delay_s,
     round(a.delay_s / 60.0, 2) as delay_min,
-    extract(hour from a.scheduled_arrival_at at time zone 'America/New_York')::int as scheduled_hour_local,
+    -- scheduled_arrival_at is UTC without a time zone: convert via the macro (see macros/to_local_time.sql)
+    extract(hour from {{ to_local_time('a.scheduled_arrival_at') }})::int as scheduled_hour_local,
     a.delay_s between {{ var('on_time_early_s') }} and {{ var('on_time_late_s') }} as is_on_time,
     a.delay_s > {{ var('on_time_late_s') }} as is_late,
     a.delay_s < {{ var('on_time_early_s') }} as is_early
