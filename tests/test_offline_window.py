@@ -75,3 +75,13 @@ def test_fraction_of_an_hour_inside_the_window():
     assert w.fraction_of(at_utc(6, 0), at_utc(7, 0)) == 0.0                           # 07:00-08:00 Rome
     w2 = OfflineWindow.parse("00:30-07:00", ROME)
     assert w2.fraction_of(at_utc(23, 0), at_utc(23, 0) + timedelta(hours=1)) == 0.5
+
+
+def test_fraction_of_accepts_airflow_pendulum_datetimes():
+    # Airflow passes data_interval_start as a pendulum DateTime; end - start is then a pendulum Interval, which
+    # can't be divided by a timedelta. That raised AttributeError in gtfs_rt_hourly on 2026-11-26 (fixed 1623e6c).
+    pendulum = pytest.importorskip("pendulum")
+    w = OfflineWindow.parse("00:00-07:00", ROME)
+    start = pendulum.datetime(2026, 11, 26, 23, tz="UTC")       # 00:00-01:00 Rome
+    assert w.fraction_of(start, start + timedelta(hours=1)) == 1.0
+    assert w.fraction_of(start.add(hours=7), start.add(hours=8)) == 0.0
